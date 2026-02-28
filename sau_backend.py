@@ -413,6 +413,7 @@ def postVideo():
     account_list = data.get('accountList', [])
     type = data.get('type')
     title = data.get('title')
+    body = data.get('body', '')
     tags = data.get('tags')
     category = data.get('category')
     enableTimer = data.get('enableTimer')
@@ -464,6 +465,7 @@ def postVideo():
                     content_type,
                     original_declare,
                     visibility,
+                    body,
                 )
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,

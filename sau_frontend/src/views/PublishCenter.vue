@@ -364,6 +364,19 @@
             />
           </div>
 
+          <div v-if="tab.publishType === 'image' && tab.selectedPlatform === 1" class="title-section">
+            <h3>正文</h3>
+            <el-input
+              v-model="tab.body"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入正文（可选）"
+              maxlength="1000"
+              show-word-limit
+              class="title-input"
+            />
+          </div>
+
           <!-- 话题输入 -->
           <div class="topic-section">
             <h3>话题</h3>
@@ -621,6 +634,7 @@ const defaultTabInit = {
   selectedAccounts: [], // 选中的账号ID列表
   selectedPlatform: 1, // 选中的平台（单选）
   title: '',
+  body: '',
   productLink: '', // 商品链接
   productTitle: '', // 商品名称
   selectedTopics: [], // 话题列表（不带#号）
@@ -976,6 +990,7 @@ const confirmPublish = async (tab) => {
     const publishData = {
       type: tab.selectedPlatform,
       title: tab.title,
+      body: tab.body,
       tags: tab.selectedTopics, // 不带#号的话题列表
       fileList: tab.fileList.map(file => file.path), // 只发送文件路径
       accountList: tab.selectedAccounts.map(accountId => {
@@ -1015,6 +1030,7 @@ const confirmPublish = async (tab) => {
         tab.fileList = []
         tab.displayFileList = []
         tab.title = ''
+        tab.body = ''
         tab.selectedTopics = []
         tab.selectedAccounts = []
         tab.scheduleEnabled = false

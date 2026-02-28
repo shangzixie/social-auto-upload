@@ -403,9 +403,33 @@ class XiaoHongShuVideo(object):
 
     async def dismiss_intercept_modal(self, page: Page):
         modal_masks = page.locator(".d-modal-mask")
-        if await modal_masks.count() == 0:
+        modal_root = page.locator(".d-modal").first
+        has_mask = await modal_masks.count() > 0
+        has_modal = await modal_root.count() > 0
+        if not has_mask and not has_modal:
             return
+
+        agreement_selectors = [
+            ".d-modal .d-checkbox input[type='checkbox']",
+            ".d-modal .d-checkbox .d-checkbox-simulator",
+        ]
+        for selector in agreement_selectors:
+            agreement = page.locator(selector).first
+            if not await agreement.count():
+                continue
+            try:
+                if "input[type='checkbox']" in selector:
+                    if not await agreement.is_checked():
+                        await agreement.click(timeout=2000, force=True)
+                else:
+                    await agreement.click(timeout=2000)
+                await page.wait_for_timeout(100)
+                break
+            except Exception:
+                continue
+
         confirm_selectors = [
+            ".d-modal button:has-text('声明原创')",
             ".d-modal button:has-text('确定')",
             ".d-modal button:has-text('确认')",
             ".d-modal button:has-text('我知道了')",
@@ -420,7 +444,7 @@ class XiaoHongShuVideo(object):
                     pass
                 break
         try:
-            await page.locator(".d-modal-mask").first.wait_for(state="hidden", timeout=3000)
+            await page.locator(".d-modal-mask, .d-modal").first.wait_for(state="hidden", timeout=3000)
         except Exception:
             pass
 
@@ -467,16 +491,36 @@ class XiaoHongShuVideo(object):
 
 
 class XiaoHongShuImage(object):
-    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, original_declare=False, visibility='public'):
+    def __init__(
+            self,
+            title,
+            file_paths,
+            tags,
+            publish_date: datetime,
+            account_file,
+            original_declare=False,
+            visibility='public',
+            body='',
+    ):
         self.title = title
         self.file_paths = [str(file_path) for file_path in file_paths]
         self.tags = tags
+        self.body = str(body or "").strip()
         self.publish_date = publish_date
         self.account_file = account_file
         self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = LOCAL_CHROME_HEADLESS
         self.original_declare = bool(original_declare)
         self.visibility = visibility if visibility in {'public', 'private'} else 'public'
+
+    @staticmethod
+    def build_note_content(body, tags):
+        body_text = str(body or "").strip()
+        tag_tokens = [f"#{str(tag).strip()}" for tag in tags if str(tag).strip()]
+        tags_text = " ".join(tag_tokens)
+        if body_text and tags_text:
+            return f"{body_text}\n{tags_text}"
+        return body_text or tags_text
 
     async def set_schedule_time_xiaohongshu(self, page, publish_date):
         label_element = page.locator("label:has-text('定时发布')")
@@ -545,10 +589,10 @@ class XiaoHongShuImage(object):
         if not css_selector:
             raise RuntimeError("未找到图文正文输入框，请检查小红书页面结构")
 
-        for tag in self.tags:
-            await page.type(css_selector, "#" + tag)
-            await page.press(css_selector, "Space")
-        xiaohongshu_logger.info(f'总共添加{len(self.tags)}个话题')
+        note_text = self.build_note_content(self.body, self.tags)
+        if note_text:
+            await page.type(css_selector, note_text)
+        xiaohongshu_logger.info(f'正文长度{len(self.body)}，总共添加{len(self.tags)}个话题')
 
     async def upload(self, playwright: Playwright) -> None:
         if self.local_executable_path:
@@ -643,9 +687,33 @@ class XiaoHongShuImage(object):
 
     async def dismiss_intercept_modal(self, page: Page):
         modal_masks = page.locator(".d-modal-mask")
-        if await modal_masks.count() == 0:
+        modal_root = page.locator(".d-modal").first
+        has_mask = await modal_masks.count() > 0
+        has_modal = await modal_root.count() > 0
+        if not has_mask and not has_modal:
             return
+
+        agreement_selectors = [
+            ".d-modal .d-checkbox input[type='checkbox']",
+            ".d-modal .d-checkbox .d-checkbox-simulator",
+        ]
+        for selector in agreement_selectors:
+            agreement = page.locator(selector).first
+            if not await agreement.count():
+                continue
+            try:
+                if "input[type='checkbox']" in selector:
+                    if not await agreement.is_checked():
+                        await agreement.click(timeout=2000, force=True)
+                else:
+                    await agreement.click(timeout=2000)
+                await page.wait_for_timeout(100)
+                break
+            except Exception:
+                continue
+
         confirm_selectors = [
+            ".d-modal button:has-text('声明原创')",
             ".d-modal button:has-text('确定')",
             ".d-modal button:has-text('确认')",
             ".d-modal button:has-text('我知道了')",
@@ -660,7 +728,7 @@ class XiaoHongShuImage(object):
                     pass
                 break
         try:
-            await page.locator(".d-modal-mask").first.wait_for(state="hidden", timeout=3000)
+            await page.locator(".d-modal-mask, .d-modal").first.wait_for(state="hidden", timeout=3000)
         except Exception:
             pass
 
