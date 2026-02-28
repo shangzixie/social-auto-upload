@@ -475,7 +475,7 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle, content_type, body)
+                          start_days, thumbnail_path, productLink, productTitle, content_type, body, visibility)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)

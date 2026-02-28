@@ -311,14 +311,20 @@
             </el-radio-group>
           </div>
 
-          <!-- 小红书原创与可见范围 -->
+          <!-- 小红书原创声明 -->
           <div v-if="tab.selectedPlatform === 1" class="xhs-options-section">
             <h3>发布设置</h3>
             <el-checkbox v-model="tab.originalDeclare">原创声明</el-checkbox>
+          </div>
+
+          <!-- 可见范围（小红书 + 抖音图文） -->
+          <div v-if="tab.selectedPlatform === 1 || (tab.selectedPlatform === 3 && tab.publishType === 'image')" class="xhs-options-section">
+            <h3>谁可以看</h3>
             <div class="visibility-options">
               <span class="label">可见范围：</span>
               <el-radio-group v-model="tab.visibility">
                 <el-radio label="public">公开可见</el-radio>
+                <el-radio v-if="tab.selectedPlatform === 3 && tab.publishType === 'image'" label="friends">好友可见</el-radio>
                 <el-radio label="private">仅自己可见</el-radio>
               </el-radio-group>
             </div>

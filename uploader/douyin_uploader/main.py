@@ -394,11 +394,12 @@ class DouYinVideo(object):
 
 
 class DouYinImage(object):
-    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, body=''):
+    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, body='', visibility='public'):
         self.title = title
         self.file_paths = [str(file_path) for file_path in file_paths]
         self.tags = tags
         self.body = str(body or "").strip()
+        self.visibility = visibility if visibility in {'public', 'friends', 'private'} else 'public'
         self.publish_date = publish_date
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
@@ -719,6 +720,96 @@ class DouYinImage(object):
 
         raise RuntimeError("未找到抖音图文发布按钮，请检查页面结构")
 
+    async def set_visibility(self, page: Page):
+        if self.visibility == "public":
+            target_text = "公开可见"
+        elif self.visibility == "friends":
+            target_text = "好友可见"
+        else:
+            target_text = "仅自己可见"
+        candidates = [target_text]
+        # Some page versions use alternative wording.
+        if self.visibility == "public":
+            candidates.extend(["公开", "所有人可见"])
+        if self.visibility == "friends":
+            candidates.extend(["互关朋友可见", "朋友可见", "好友"])
+        if self.visibility == "private":
+            candidates.extend(["仅自己", "自己可见", "私密", "私密仅自己可见", "仅我可见"])
+
+        if not hasattr(page, "get_by_text"):
+            if self.visibility == "private":
+                raise RuntimeError("当前页面不支持设置“谁可以看”")
+            return
+
+        for text in candidates:
+            locator = page.get_by_text(text).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    await asyncio.sleep(0.2)
+                    return
+            except Exception:
+                continue
+
+        # Fallback for page versions where visibility options are radio inputs
+        # rendered without stable visible text nodes.
+        if hasattr(page, "evaluate"):
+            try:
+                clicked = await page.evaluate(
+                    """
+                    (visibility) => {
+                      const targetValue = visibility === "private" ? "1" : (visibility === "friends" ? "2" : "0");
+                      const isPrivate = visibility === "private";
+                      const scopeHints = ["可见范围", "谁可以看", "发布设置", "权限"];
+                      const collectContainers = [];
+                      const all = Array.from(document.querySelectorAll("*"));
+                      for (const el of all) {
+                        const txt = (el.textContent || "").trim();
+                        if (!txt) continue;
+                        if (scopeHints.some((hint) => txt.includes(hint))) {
+                          collectContainers.push(el);
+                        }
+                      }
+
+                      const checkboxFrom = (root) => Array.from(
+                        root.querySelectorAll("input.radio-native-p6VBGt[type='checkbox'], input[type='checkbox'][value='0'], input[type='checkbox'][value='1'], input[type='checkbox'][value='2']")
+                      );
+                      let checkboxes = [];
+                      for (const c of collectContainers) {
+                        checkboxes = checkboxes.concat(checkboxFrom(c));
+                      }
+                      if (!checkboxes.length) {
+                        checkboxes = Array.from(document.querySelectorAll("input[type='checkbox'][value='0'], input[type='checkbox'][value='1'], input[type='checkbox'][value='2']"));
+                      }
+                      if (checkboxes.length) {
+                        const target = checkboxes.find((el) => String(el.value) === targetValue) || null;
+                        if (target) {
+                          const clickable = target.closest("label") || target;
+                          clickable.click();
+                          return true;
+                        }
+                      }
+
+                      const radios = Array.from(document.querySelectorAll("input[type='radio']"));
+                      if (!radios.length) return false;
+                      const radioTarget = isPrivate ? radios[radios.length - 1] : radios[0];
+                      if (!radioTarget) return false;
+                      radioTarget.click();
+                      return true;
+                    }
+                    """,
+                    self.visibility,
+                )
+                if clicked:
+                    await asyncio.sleep(0.2)
+                    return
+            except Exception:
+                pass
+
+        if self.visibility in {"private", "friends"}:
+            debug_path = await self.dump_debug_artifacts(page, "set_visibility_timeout")
+            raise RuntimeError(f"未找到抖音图文“谁可以看”设置入口，请检查页面结构（诊断目录：{debug_path}）")
+
     async def upload(self, playwright: Playwright) -> None:
         if self.local_executable_path:
             browser = await playwright.chromium.launch(headless=self.headless, executable_path=self.local_executable_path)
@@ -736,6 +827,7 @@ class DouYinImage(object):
         await self.wait_for_image_editor_url(page, timeout_ms=45000)
         await self.wait_for_image_editor_ready(page, timeout_ms=30000)
         await self.fill_title_and_desc(page)
+        await self.set_visibility(page)
 
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
@@ -767,7 +859,7 @@ class DouYinImage(object):
 
         await context.storage_state(path=self.account_file)
         douyin_logger.success('  [-]cookie更新完毕！')
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
         await context.close()
         await browser.close()
 

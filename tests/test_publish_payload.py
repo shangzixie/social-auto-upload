@@ -63,6 +63,8 @@ class PublishPayloadTests(unittest.TestCase):
     def test_normalize_visibility(self):
         self.assertEqual(normalize_visibility("public"), "public")
         self.assertEqual(normalize_visibility("公开可见"), "public")
+        self.assertEqual(normalize_visibility("friends"), "friends")
+        self.assertEqual(normalize_visibility("好友可见"), "friends")
         self.assertEqual(normalize_visibility("private"), "private")
         self.assertEqual(normalize_visibility("仅自己可见"), "private")
         self.assertEqual(normalize_visibility("unknown"), "public")

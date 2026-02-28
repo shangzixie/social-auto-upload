@@ -47,8 +47,9 @@ class PostVideoDouyinBodyTests(unittest.TestCase):
         captured = {}
 
         class FakeDouyinImage:
-            def __init__(self, title, file_paths, tags, publish_date, account_file, body=""):
+            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public"):
                 captured["body"] = body
+                captured["visibility"] = visibility
 
             async def main(self):
                 return None
@@ -61,9 +62,33 @@ class PostVideoDouyinBodyTests(unittest.TestCase):
                 account_file=["douyin.json"],
                 content_type="image",
                 body="这里是抖音图文正文",
+                visibility="private",
             )
 
         self.assertEqual(captured.get("body"), "这里是抖音图文正文")
+        self.assertEqual(captured.get("visibility"), "private")
+
+    def test_post_video_douyin_passes_friends_visibility(self):
+        captured = {}
+
+        class FakeDouyinImage:
+            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public"):
+                captured["visibility"] = visibility
+
+            async def main(self):
+                return None
+
+        with patch.object(postVideo, "DouYinImage", FakeDouyinImage), patch.object(postVideo.asyncio, "run", lambda coro, debug=False: coro.close()):
+            postVideo.post_video_DouYin(
+                title="标题",
+                files=["1.jpg"],
+                tags=["旅行"],
+                account_file=["douyin.json"],
+                content_type="image",
+                visibility="friends",
+            )
+
+        self.assertEqual(captured.get("visibility"), "friends")
 
 
 if __name__ == "__main__":

@@ -29,6 +29,8 @@ def normalize_visibility(visibility):
     normalized = str(visibility).strip().lower()
     if normalized in {"public", "公开可见"}:
         return "public"
+    if normalized in {"friends", "好友可见", "互关朋友可见"}:
+        return "friends"
     if normalized in {"private", "仅自己可见", "自己可见"}:
         return "private"
     return "public"

@@ -264,6 +264,54 @@ class PublishButtonPage:
         return PublishCssLocator(False, self)
 
 
+class VisibilityLocator:
+    def __init__(self, page, text):
+        self.page = page
+        self.text = text
+
+    @property
+    def first(self):
+        return self
+
+    async def count(self):
+        return 1 if self.text in self.page.available_texts else 0
+
+    async def click(self, timeout=None):
+        self.page.clicked_text = self.text
+
+
+class VisibilityPage:
+    def __init__(self, available_texts):
+        self.available_texts = set(available_texts)
+        self.clicked_text = None
+
+    def get_by_text(self, text):
+        return VisibilityLocator(self, text)
+
+
+class VisibilityVariantPage:
+    def __init__(self, available_texts):
+        self.available_texts = set(available_texts)
+        self.clicked_text = None
+
+    def get_by_text(self, text):
+        return VisibilityLocator(self, text)
+
+
+class VisibilityEvaluatePage:
+    def __init__(self):
+        self.clicked_by_evaluate = False
+
+    def get_by_text(self, text):
+        return VisibilityLocator(self, text)
+
+    async def evaluate(self, script, arg):
+        if "input[type='radio']" in script or "input[type=\"radio\"]" in script or "input[type='checkbox'][value='0']" in script:
+            self.clicked_by_evaluate = True
+            return True
+        return False
+
+
 class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_wait_for_image_editor_url_ignores_hidden_error_text(self):
         uploader = DouYinImage(
@@ -401,6 +449,70 @@ class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
         await uploader.click_publish_button(page)
 
         self.assertTrue(page.publish_clicked)
+
+    async def test_set_visibility_private_clicks_private_option(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=[],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="",
+            visibility="private",
+        )
+        page = VisibilityPage({"仅自己可见"})
+
+        await uploader.set_visibility(page)
+
+        self.assertEqual(page.clicked_text, "仅自己可见")
+
+    async def test_set_visibility_private_accepts_variant_text(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=[],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="",
+            visibility="private",
+        )
+        page = VisibilityVariantPage({"仅自己"})
+
+        await uploader.set_visibility(page)
+
+        self.assertEqual(page.clicked_text, "仅自己")
+
+    async def test_set_visibility_private_falls_back_to_dom_evaluate(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=[],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="",
+            visibility="private",
+        )
+        page = VisibilityEvaluatePage()
+
+        await uploader.set_visibility(page)
+
+        self.assertTrue(page.clicked_by_evaluate)
+
+    async def test_set_visibility_friends_clicks_friend_option(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=[],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="",
+            visibility="friends",
+        )
+        page = VisibilityPage({"好友可见"})
+
+        await uploader.set_visibility(page)
+
+        self.assertEqual(page.clicked_text, "好友可见")
 
 
 if __name__ == "__main__":
