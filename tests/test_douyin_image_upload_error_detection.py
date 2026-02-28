@@ -514,7 +514,7 @@ class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(page.clicked_text, "好友可见")
 
-    async def test_upload_success_dumps_publish_success_artifacts(self):
+    async def test_upload_success_does_not_dump_debug_artifacts(self):
         class _FakePage:
             def __init__(self):
                 self.url = "https://creator.douyin.com/creator-micro/content/upload"
@@ -597,7 +597,7 @@ class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
             with patch("uploader.douyin_uploader.main.asyncio.sleep", side_effect=_fast_sleep):
                 await uploader.upload(playwright)
 
-        uploader.dump_debug_artifacts.assert_awaited_with(page, "publish_success")
+        uploader.dump_debug_artifacts.assert_not_awaited()
 
 
 if __name__ == "__main__":

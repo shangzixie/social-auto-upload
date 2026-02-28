@@ -917,14 +917,13 @@ class DouYinImage(object):
                     timeout=3000
                 )
                 final_visibility = await self.read_visibility_value(page)
-                success_debug_path = await self.dump_debug_artifacts(page, "publish_success")
-                douyin_logger.success(
-                    f"[visibility] publish_success target={self.visibility} dom={final_visibility} debug={success_debug_path}"
-                )
+                douyin_logger.success(f"[visibility] publish_success target={self.visibility} dom={final_visibility}")
                 douyin_logger.success("  [-]图文发布成功")
                 break
             except Exception:
-                douyin_logger.info("  [-] 图文正在发布中...")
+                elapsed = loop.time() - publish_start
+                if int(elapsed * 2) % 10 == 0:
+                    douyin_logger.info("  [-] 图文正在发布中...")
                 await asyncio.sleep(0.5)
         else:
             debug_path = await self.dump_debug_artifacts(page, "publish_timeout")
