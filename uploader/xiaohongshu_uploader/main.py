@@ -399,6 +399,30 @@ class XiaoHongShuVideo(object):
             else:
                 await self.probe_publish_options(page, "original_click_failed")
                 raise RuntimeError("原创声明开关点击失败")
+        await self.dismiss_intercept_modal(page)
+
+    async def dismiss_intercept_modal(self, page: Page):
+        modal_masks = page.locator(".d-modal-mask")
+        if await modal_masks.count() == 0:
+            return
+        confirm_selectors = [
+            ".d-modal button:has-text('确定')",
+            ".d-modal button:has-text('确认')",
+            ".d-modal button:has-text('我知道了')",
+        ]
+        for selector in confirm_selectors:
+            button = page.locator(selector).first
+            if await button.count():
+                try:
+                    await button.click(timeout=2000)
+                    await page.wait_for_timeout(200)
+                except Exception:
+                    pass
+                break
+        try:
+            await page.locator(".d-modal-mask").first.wait_for(state="hidden", timeout=3000)
+        except Exception:
+            pass
 
     async def set_visibility(self, page: Page):
         target_text = "公开可见" if self.visibility == "public" else "仅自己可见"
@@ -414,7 +438,17 @@ class XiaoHongShuVideo(object):
         if target_text in current_text:
             return
 
-        await select.click(timeout=3000)
+        for attempt in range(2):
+            try:
+                await self.dismiss_intercept_modal(page)
+                await select.click(timeout=3000)
+                break
+            except Exception:
+                await self.dismiss_intercept_modal(page)
+                if attempt == 1:
+                    await self.probe_publish_options(page, "permission_click_blocked")
+                    raise RuntimeError("可见范围选择框被弹窗遮挡，点击失败")
+
         option = page.get_by_text(target_text).first
         if await option.count():
             await option.click(timeout=3000)
@@ -605,6 +639,30 @@ class XiaoHongShuImage(object):
             else:
                 await self.probe_publish_options(page, "original_click_failed")
                 raise RuntimeError("原创声明开关点击失败")
+        await self.dismiss_intercept_modal(page)
+
+    async def dismiss_intercept_modal(self, page: Page):
+        modal_masks = page.locator(".d-modal-mask")
+        if await modal_masks.count() == 0:
+            return
+        confirm_selectors = [
+            ".d-modal button:has-text('确定')",
+            ".d-modal button:has-text('确认')",
+            ".d-modal button:has-text('我知道了')",
+        ]
+        for selector in confirm_selectors:
+            button = page.locator(selector).first
+            if await button.count():
+                try:
+                    await button.click(timeout=2000)
+                    await page.wait_for_timeout(200)
+                except Exception:
+                    pass
+                break
+        try:
+            await page.locator(".d-modal-mask").first.wait_for(state="hidden", timeout=3000)
+        except Exception:
+            pass
 
     async def set_visibility(self, page: Page):
         target_text = "公开可见" if self.visibility == "public" else "仅自己可见"
@@ -620,7 +678,17 @@ class XiaoHongShuImage(object):
         if target_text in current_text:
             return
 
-        await select.click(timeout=3000)
+        for attempt in range(2):
+            try:
+                await self.dismiss_intercept_modal(page)
+                await select.click(timeout=3000)
+                break
+            except Exception:
+                await self.dismiss_intercept_modal(page)
+                if attempt == 1:
+                    await self.probe_publish_options(page, "permission_click_blocked")
+                    raise RuntimeError("可见范围选择框被弹窗遮挡，点击失败")
+
         option = page.get_by_text(target_text).first
         if await option.count():
             await option.click(timeout=3000)
