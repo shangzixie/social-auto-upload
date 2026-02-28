@@ -330,6 +330,27 @@
             </div>
           </div>
 
+          <div v-if="tab.selectedPlatform === 3 && tab.publishType === 'image'" class="xhs-options-section">
+            <h3>音乐设置</h3>
+            <div class="visibility-options">
+              <span class="label">选择方式：</span>
+              <el-radio-group v-model="tab.musicMode">
+                <el-radio label="none">不选择</el-radio>
+                <el-radio label="auto">自动选择</el-radio>
+                <el-radio label="keyword">关键词选择</el-radio>
+              </el-radio-group>
+            </div>
+            <el-input
+              v-if="tab.musicMode === 'keyword'"
+              v-model="tab.musicKeyword"
+              type="text"
+              :rows="1"
+              placeholder="输入音乐关键词，例如：山河故人"
+              maxlength="50"
+              class="product-name-input"
+            />
+          </div>
+
           <!-- 草稿选项 (仅在视频号可见) -->
           <div v-if="tab.selectedPlatform === 2" class="draft-section">
             <el-checkbox
@@ -643,6 +664,8 @@ const defaultTabInit = {
   selectedTopics: [], // 话题列表（不带#号）
   originalDeclare: false, // 小红书原创声明
   visibility: 'public', // 小红书可见范围
+  musicMode: 'none', // 抖音图文音乐选择策略: none/auto/keyword
+  musicKeyword: '', // 抖音图文音乐关键词
   scheduleEnabled: false, // 定时发布开关
   videosPerDay: 1, // 每天发布视频数量
   dailyTimes: ['10:00'], // 每天发布时间点列表
@@ -1045,7 +1068,9 @@ const confirmPublish = async (tab) => {
       isDraft: tab.isDraft, // 是否保存为草稿，仅视频号平台使用
       contentType: tab.publishType,
       originalDeclare: tab.originalDeclare,
-      visibility: tab.visibility
+      visibility: tab.visibility,
+      musicMode: tab.selectedPlatform === 3 && tab.publishType === 'image' ? tab.musicMode : 'none',
+      musicKeyword: tab.selectedPlatform === 3 && tab.publishType === 'image' ? (tab.musicKeyword || '').trim() : ''
     }
 
     // 调用后端发布API
@@ -1071,6 +1096,8 @@ const confirmPublish = async (tab) => {
         tab.body = ''
         tab.selectedTopics = []
         tab.selectedAccounts = []
+        tab.musicMode = 'none'
+        tab.musicKeyword = ''
         tab.scheduleEnabled = false
         resolve()
       } else {

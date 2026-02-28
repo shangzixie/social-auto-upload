@@ -427,6 +427,10 @@ def postVideo():
     content_type = normalize_content_type(data.get('contentType'))
     original_declare = normalize_original_declare(data.get('originalDeclare'))
     visibility = normalize_visibility(data.get('visibility'))
+    music_mode = str(data.get('musicMode', 'none') or 'none').strip().lower()
+    if music_mode not in {'none', 'auto', 'keyword'}:
+        music_mode = 'none'
+    music_keyword = str(data.get('musicKeyword', '') or '').strip()
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -475,7 +479,8 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle, content_type, body, visibility)
+                          start_days, thumbnail_path, productLink, productTitle, content_type, body, visibility,
+                          music_mode, music_keyword)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)

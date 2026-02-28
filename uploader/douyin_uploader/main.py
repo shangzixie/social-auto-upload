@@ -394,12 +394,25 @@ class DouYinVideo(object):
 
 
 class DouYinImage(object):
-    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, body='', visibility='public'):
+    def __init__(
+        self,
+        title,
+        file_paths,
+        tags,
+        publish_date: datetime,
+        account_file,
+        body='',
+        visibility='public',
+        music_mode='none',
+        music_keyword='',
+    ):
         self.title = title
         self.file_paths = [str(file_path) for file_path in file_paths]
         self.tags = tags
         self.body = str(body or "").strip()
         self.visibility = visibility if visibility in {'public', 'friends', 'private'} else 'public'
+        self.music_mode = music_mode if music_mode in {'none', 'auto', 'keyword'} else 'none'
+        self.music_keyword = str(music_keyword or "").strip()
         self.publish_date = publish_date
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
@@ -414,6 +427,20 @@ class DouYinImage(object):
         if body_text and tags_text:
             return f"{body_text}\n{tags_text}"
         return body_text or tags_text
+
+    def build_music_query(self) -> str:
+        if self.music_mode != 'keyword':
+            return ''
+        if self.music_keyword:
+            return self.music_keyword[:50]
+        keywords = []
+        for token in [self.title, *self.tags]:
+            text = str(token or "").strip()
+            if text:
+                keywords.append(text)
+            if len(keywords) >= 2:
+                break
+        return " ".join(keywords)[:50]
 
     async def set_schedule_time_douyin(self, page, publish_date):
         label_element = page.locator("[class^='radio']:has-text('定时发布')")
@@ -720,6 +747,82 @@ class DouYinImage(object):
 
         raise RuntimeError("未找到抖音图文发布按钮，请检查页面结构")
 
+    async def set_music(self, page: Page):
+        if self.music_mode == "none":
+            douyin_logger.info("[music] skip mode=none")
+            return
+
+        douyin_logger.info(f"[music] selecting mode={self.music_mode}")
+
+        if not hasattr(page, "get_by_text"):
+            douyin_logger.warning("[music] page does not support text locators, skip")
+            return
+
+        open_clicked = False
+        open_candidates = ["选择音乐", "点击添加合适作品风格音乐", "添加音乐"]
+        for text in open_candidates:
+            locator = page.get_by_text(text).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    open_clicked = True
+                    douyin_logger.info(f"[music] opened by text={text}")
+                    break
+            except Exception:
+                continue
+
+        if not open_clicked:
+            debug_path = await self.dump_debug_artifacts(page, "open_music_timeout")
+            douyin_logger.warning(f"[music] open panel failed, skip. debug={debug_path}")
+            return
+
+        await asyncio.sleep(0.5)
+
+        if self.music_mode == "keyword":
+            query = self.build_music_query()
+            if not query:
+                douyin_logger.warning("[music] keyword mode without query, fallback to auto")
+            else:
+                input_selectors = [
+                    ".semi-sidesheet-content input[placeholder*='搜索音乐']",
+                    "input[placeholder*='搜索音乐']",
+                ]
+                input_filled = False
+                for selector in input_selectors:
+                    locator = page.locator(selector).first
+                    try:
+                        if await locator.count():
+                            await locator.click(timeout=2000)
+                            await locator.fill(query, timeout=3000)
+                            await asyncio.sleep(0.5)
+                            input_filled = True
+                            douyin_logger.info(f"[music] searched keyword={query}")
+                            break
+                    except Exception:
+                        continue
+                if not input_filled:
+                    debug_path = await self.dump_debug_artifacts(page, "music_search_timeout")
+                    douyin_logger.warning(f"[music] search input not found, skip search. debug={debug_path}")
+
+        use_selectors = [
+            ".semi-sidesheet-content button.apply-btn-LUPP0D:has-text('使用')",
+            ".semi-sidesheet-content button:has-text('使用')",
+            "button.apply-btn-LUPP0D:has-text('使用')",
+        ]
+        for selector in use_selectors:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    await asyncio.sleep(0.3)
+                    douyin_logger.success("[music] selected first available music")
+                    return
+            except Exception:
+                continue
+
+        debug_path = await self.dump_debug_artifacts(page, "select_music_timeout")
+        douyin_logger.warning(f"[music] use button not found, skip. debug={debug_path}")
+
     async def set_visibility(self, page: Page):
         target_value = "0" if self.visibility == "public" else ("2" if self.visibility == "friends" else "1")
         current_value = await self.read_visibility_value(page)
@@ -896,6 +999,7 @@ class DouYinImage(object):
         await self.wait_for_image_editor_ready(page, timeout_ms=30000)
         await self.fill_title_and_desc(page)
         await self.set_visibility(page)
+        await self.set_music(page)
 
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)

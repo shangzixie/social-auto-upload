@@ -31,7 +31,8 @@ def post_video_tencent(title,files,tags,account_file,category=TencentZoneTypes.L
 
 def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LIFESTYLE.value,enableTimer=False,videos_per_day = 1, daily_times=None,start_days = 0,
                       thumbnail_path = '',
-                      productLink = '', productTitle = '', content_type='video', body='', visibility='public'):
+                      productLink = '', productTitle = '', content_type='video', body='', visibility='public',
+                      music_mode='none', music_keyword=''):
     # 生成文件的完整路径
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
@@ -43,7 +44,7 @@ def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LI
             print(f"图文文件数量：{len(files)}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = DouYinImage(title, files, tags, publish_datetime, cookie, body, visibility)
+            app = DouYinImage(title, files, tags, publish_datetime, cookie, body, visibility, music_mode, music_keyword)
             asyncio.run(app.main(), debug=False)
         return
 

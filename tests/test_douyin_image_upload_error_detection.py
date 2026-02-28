@@ -312,6 +312,56 @@ class VisibilityEvaluatePage:
         return False
 
 
+class MusicLocator:
+    def __init__(self, page, kind):
+        self.page = page
+        self.kind = kind
+
+    @property
+    def first(self):
+        return self
+
+    async def count(self):
+        if self.kind == "open_music":
+            return 1
+        if self.kind == "search_input":
+            return 1 if self.page.sidebar_opened else 0
+        if self.kind == "use_button":
+            return 1 if self.page.sidebar_opened else 0
+        return 0
+
+    async def click(self, timeout=None):
+        if self.kind == "open_music":
+            self.page.sidebar_opened = True
+            return None
+        if self.kind == "use_button":
+            self.page.music_used = True
+            return None
+        return None
+
+    async def fill(self, text, timeout=None):
+        self.page.search_text = text
+
+
+class MusicPage:
+    def __init__(self):
+        self.sidebar_opened = False
+        self.search_text = ""
+        self.music_used = False
+
+    def get_by_text(self, text):
+        if text == "选择音乐":
+            return MusicLocator(self, "open_music")
+        return MusicLocator(self, "unknown")
+
+    def locator(self, selector):
+        if "搜索音乐" in selector:
+            return MusicLocator(self, "search_input")
+        if "使用" in selector:
+            return MusicLocator(self, "use_button")
+        return MusicLocator(self, "unknown")
+
+
 class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_wait_for_image_editor_url_ignores_hidden_error_text(self):
         uploader = DouYinImage(
@@ -513,6 +563,46 @@ class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
         await uploader.set_visibility(page)
 
         self.assertEqual(page.clicked_text, "好友可见")
+
+    async def test_set_music_keyword_searches_and_clicks_use(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=["旅行"],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="正文",
+            music_mode="keyword",
+            music_keyword="山河故人",
+        )
+        page = MusicPage()
+
+        async def _fast_sleep(_seconds):
+            return None
+
+        with patch("uploader.douyin_uploader.main.asyncio.sleep", side_effect=_fast_sleep):
+            await uploader.set_music(page)
+
+        self.assertTrue(page.sidebar_opened)
+        self.assertEqual(page.search_text, "山河故人")
+        self.assertTrue(page.music_used)
+
+    async def test_set_music_none_skips_selection(self):
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=["旅行"],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="正文",
+            music_mode="none",
+        )
+        page = MusicPage()
+
+        await uploader.set_music(page)
+
+        self.assertFalse(page.sidebar_opened)
+        self.assertFalse(page.music_used)
 
     async def test_upload_success_does_not_dump_debug_artifacts(self):
         class _FakePage:

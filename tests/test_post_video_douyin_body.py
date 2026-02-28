@@ -47,7 +47,7 @@ class PostVideoDouyinBodyTests(unittest.TestCase):
         captured = {}
 
         class FakeDouyinImage:
-            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public"):
+            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public", music_mode="none", music_keyword=""):
                 captured["body"] = body
                 captured["visibility"] = visibility
 
@@ -72,7 +72,7 @@ class PostVideoDouyinBodyTests(unittest.TestCase):
         captured = {}
 
         class FakeDouyinImage:
-            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public"):
+            def __init__(self, title, file_paths, tags, publish_date, account_file, body="", visibility="public", music_mode="none", music_keyword=""):
                 captured["visibility"] = visibility
 
             async def main(self):
@@ -89,6 +89,42 @@ class PostVideoDouyinBodyTests(unittest.TestCase):
             )
 
         self.assertEqual(captured.get("visibility"), "friends")
+
+    def test_post_video_douyin_passes_music_options_for_image(self):
+        captured = {}
+
+        class FakeDouyinImage:
+            def __init__(
+                self,
+                title,
+                file_paths,
+                tags,
+                publish_date,
+                account_file,
+                body="",
+                visibility="public",
+                music_mode="none",
+                music_keyword="",
+            ):
+                captured["music_mode"] = music_mode
+                captured["music_keyword"] = music_keyword
+
+            async def main(self):
+                return None
+
+        with patch.object(postVideo, "DouYinImage", FakeDouyinImage), patch.object(postVideo.asyncio, "run", lambda coro, debug=False: coro.close()):
+            postVideo.post_video_DouYin(
+                title="标题",
+                files=["1.jpg"],
+                tags=["旅行"],
+                account_file=["douyin.json"],
+                content_type="image",
+                music_mode="keyword",
+                music_keyword="山河故人",
+            )
+
+        self.assertEqual(captured.get("music_mode"), "keyword")
+        self.assertEqual(captured.get("music_keyword"), "山河故人")
 
 
 if __name__ == "__main__":
