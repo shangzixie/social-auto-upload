@@ -164,6 +164,26 @@
     python examples/upload_video_to_douyin.py
     ```
 
+5.  **（可选）使用 CLI 发布小红书图文**:
+    ```bash
+    python cli_main.py xiaohongshu your_account xhs-image-upload \
+      ./images/1.jpg ./images/2.jpg \
+      --title "今日探店随拍" \
+      --tags "探店,美食,日常" \
+      --original-declare \
+      --visibility public
+    ```
+
+    定时发布示例：
+    ```bash
+    python cli_main.py xiaohongshu your_account xhs-image-upload \
+      ./images/1.jpg ./images/2.jpg \
+      --title "定时图文" \
+      --tags "生活,记录" \
+      --visibility private \
+      -pt 1 -t "2026-03-01 10:30"
+    ```
+
 ## Docker 环境
 ### 自己构建镜像
 1. **构建Docker镜像**:

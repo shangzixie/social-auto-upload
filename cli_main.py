@@ -9,8 +9,9 @@ from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
 from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
+from uploader.xiaohongshu_uploader.main import xiaohongshu_setup, XiaoHongShuImage
 from utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
-    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU
+    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU, SOCIAL_MEDIA_XIAOHONGSHU
 from utils.constant import TencentZoneTypes
 from utils.files_times import get_title_and_hashtags
 
@@ -31,7 +32,9 @@ async def main():
     parser.add_argument("account_name", type=str, help="Account name for the platform: xiaoA")
     subparsers = parser.add_subparsers(dest="action", metavar='action', help="Choose action", required=True)
 
-    actions = get_cli_action()
+    actions = list(get_cli_action())
+    if "xhs-image-upload" not in actions:
+        actions.append("xhs-image-upload")
     for action in actions:
         action_parser = subparsers.add_parser(action, help=f'{action} operation')
         if action == 'login':
@@ -42,13 +45,38 @@ async def main():
             action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
                                        help="0 for immediate, 1 for scheduled", default=0)
             action_parser.add_argument('-t', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
+        elif action == 'xhs-image-upload':
+            action_parser.add_argument("image_files", nargs="+", help="Paths to image files (max 9)")
+            action_parser.add_argument("--title", required=True, help="Post title")
+            action_parser.add_argument("--tags", default="", help="Comma-separated tags, e.g. 美食,探店")
+            action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
+                                       help="0 for immediate, 1 for scheduled", default=0)
+            action_parser.add_argument('-t', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
+            action_parser.add_argument("--original-declare", action="store_true", help="Enable original declaration")
+            action_parser.add_argument("--visibility", choices=["public", "private"], default="public",
+                                       help="Visibility scope: public or private")
 
     # 解析命令行参数
     args = parser.parse_args()
     # 参数校验
     if args.action == 'upload':
         if not exists(args.video_file):
-            raise FileNotFoundError(f'Could not find the video file at {args["video_file"]}')
+            raise FileNotFoundError(f'Could not find the video file at {args.video_file}')
+        if args.publish_type == 1 and not args.schedule:
+            parser.error("The schedule must must be specified for scheduled publishing.")
+    if args.action == 'xhs-image-upload':
+        if args.platform != SOCIAL_MEDIA_XIAOHONGSHU:
+            parser.error("xhs-image-upload only supports platform 'xiaohongshu'.")
+        if len(args.image_files) == 0:
+            parser.error("At least one image file is required.")
+        if len(args.image_files) > 9:
+            parser.error("xhs-image-upload supports at most 9 images.")
+        for image_file in args.image_files:
+            if not exists(image_file):
+                raise FileNotFoundError(f'Could not find image file at {image_file}')
+            suffix = Path(image_file).suffix.lower()
+            if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+                parser.error(f"Unsupported image format: {image_file}")
         if args.publish_type == 1 and not args.schedule:
             parser.error("The schedule must must be specified for scheduled publishing.")
 
@@ -66,6 +94,8 @@ async def main():
             await weixin_setup(str(account_file), handle=True)
         elif args.platform == SOCIAL_MEDIA_KUAISHOU:
             await ks_setup(str(account_file), handle=True)
+        elif args.platform == SOCIAL_MEDIA_XIAOHONGSHU:
+            await xiaohongshu_setup(str(account_file), handle=True)
     elif args.action == 'upload':
         title, tags = get_title_and_hashtags(args.video_file)
         video_file = args.video_file
@@ -94,6 +124,26 @@ async def main():
             print("Wrong platform, please check your input")
             exit()
 
+        await app.main()
+    elif args.action == 'xhs-image-upload':
+        if args.publish_type == 0:
+            print("Uploading images immediately...")
+            publish_date = 0
+        else:
+            print("Scheduling image post...")
+            publish_date = parse_schedule(args.schedule)
+
+        tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
+        await xiaohongshu_setup(account_file, handle=False)
+        app = XiaoHongShuImage(
+            args.title,
+            args.image_files,
+            tags,
+            publish_date,
+            account_file,
+            args.original_declare,
+            args.visibility,
+        )
         await app.main()
 
 
