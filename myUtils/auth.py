@@ -84,22 +84,27 @@ async def cookie_auth_xhs(account_file):
         context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://creator.xiaohongshu.com/creator-micro/content/upload")
+        # 访问创作中心发布页（旧路径变更后更稳定）
+        await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=normal")
         try:
-            await page.wait_for_url("https://creator.xiaohongshu.com/creator-micro/content/upload", timeout=5000)
-        except:
+            await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=*", timeout=8000)
+        except Exception:
             print("[+] 等待5秒 cookie 失效")
             await context.close()
             await browser.close()
             return False
-        # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
+
+        # 登录态检测：出现登录入口则判定失效
+        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count() or await page.get_by_text('登录').count():
             print("[+] 等待5秒 cookie 失效")
+            await context.close()
+            await browser.close()
             return False
-        else:
-            print("[+] cookie 有效")
-            return True
+
+        print("[+] cookie 有效")
+        await context.close()
+        await browser.close()
+        return True
 
 
 async def check_cookie(type, file_path):

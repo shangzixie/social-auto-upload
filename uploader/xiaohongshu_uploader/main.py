@@ -390,18 +390,59 @@ class XiaoHongShuImage(object):
     async def fill_title_and_tags(self, page):
         await asyncio.sleep(1)
         xiaohongshu_logger.info('  [-] 正在填充标题和话题...')
-        title_container = page.locator('div.plugin.title-container').locator('input.d-text')
-        if await title_container.count():
-            await title_container.fill(self.title[:20])
-        else:
-            titlecontainer = page.locator(".notranslate")
-            await titlecontainer.click()
-            await page.keyboard.press("Backspace")
-            await page.keyboard.press("Control+KeyA")
-            await page.keyboard.press("Delete")
-            await page.keyboard.type(self.title)
-            await page.keyboard.press("Enter")
-        css_selector = ".ql-editor"
+        title_selectors = [
+            "div.plugin.title-container input.d-text",
+            "input[placeholder*='标题']",
+            "textarea[placeholder*='标题']",
+        ]
+        title_filled = False
+        for selector in title_selectors:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    await locator.fill(self.title[:20], timeout=3000)
+                    title_filled = True
+                    break
+            except Exception:
+                continue
+
+        if not title_filled:
+            rich_title_selectors = [
+                ".notranslate",
+                "div[contenteditable='true'][role='textbox']",
+                ".ql-editor",
+            ]
+            rich_title_filled = False
+            for selector in rich_title_selectors:
+                locator = page.locator(selector).first
+                try:
+                    if await locator.count():
+                        await locator.click(timeout=3000)
+                        await page.keyboard.press("Control+KeyA")
+                        await page.keyboard.press("Delete")
+                        await page.keyboard.type(self.title[:20])
+                        rich_title_filled = True
+                        break
+                except Exception:
+                    continue
+            if not rich_title_filled:
+                raise RuntimeError("未找到图文标题输入框，请检查小红书页面结构")
+
+        content_selectors = [
+            ".ql-editor",
+            "div[contenteditable='true'][role='textbox']",
+            "div[contenteditable='true']",
+        ]
+        css_selector = None
+        for selector in content_selectors:
+            locator = page.locator(selector).first
+            if await locator.count():
+                css_selector = selector
+                break
+        if not css_selector:
+            raise RuntimeError("未找到图文正文输入框，请检查小红书页面结构")
+
         for tag in self.tags:
             await page.type(css_selector, "#" + tag)
             await page.press(css_selector, "Space")
@@ -421,6 +462,20 @@ class XiaoHongShuImage(object):
         await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=normal")
         await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=normal")
         xiaohongshu_logger.info(f'[+]正在上传图文，共{len(self.file_paths)}张')
+
+        # 平台现状：默认先落在 normal，需要点击“上传图文”切换到 image。
+        try:
+            switch_btn = page.get_by_text("上传图文").first
+            if await switch_btn.count():
+                await switch_btn.click(timeout=5000)
+                await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image", timeout=10000)
+            else:
+                await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image")
+                await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image", timeout=10000)
+        except Exception:
+            # 容错：按钮文本或位置变化时，直接跳 image 链接
+            await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image")
+            await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image", timeout=10000)
 
         await page.locator("input.upload-input").set_input_files(self.file_paths)
 
@@ -456,4 +511,3 @@ class XiaoHongShuImage(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
-

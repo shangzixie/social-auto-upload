@@ -424,29 +424,36 @@ def postVideo():
             "data": None
         }), 400
 
-    match type:
-        case 1:
-            post_video_xhs(
-                title,
-                file_list,
-                tags,
-                account_list,
-                category,
-                enableTimer,
-                videos_per_day,
-                daily_times,
-                start_days,
-                content_type,
-            )
-        case 2:
-            post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days, is_draft)
-        case 3:
-            post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days, thumbnail_path, productLink, productTitle)
-        case 4:
-            post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days)
+    try:
+        match type:
+            case 1:
+                post_video_xhs(
+                    title,
+                    file_list,
+                    tags,
+                    account_list,
+                    category,
+                    enableTimer,
+                    videos_per_day,
+                    daily_times,
+                    start_days,
+                    content_type,
+                )
+            case 2:
+                post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                   start_days, is_draft)
+            case 3:
+                post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, thumbnail_path, productLink, productTitle)
+            case 4:
+                post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+    except Exception as exc:
+        return jsonify({
+            "code": 500,
+            "msg": f"发布失败: {str(exc)}",
+            "data": None
+        }), 500
     # 返回响应给客户端
     return jsonify(
         {
