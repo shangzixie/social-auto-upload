@@ -286,9 +286,13 @@
           <!-- 平台选择 -->
           <div class="platform-section">
             <h3>平台</h3>
-            <el-radio-group v-model="tab.selectedPlatform" class="platform-radios">
+            <el-radio-group
+              v-model="tab.selectedPlatform"
+              class="platform-radios"
+              @change="() => handlePlatformChange(tab)"
+            >
               <el-radio 
-                v-for="platform in platforms" 
+                v-for="platform in getAvailablePlatforms(tab)" 
                 :key="platform.key"
                 :label="platform.key"
                 class="platform-radio"
@@ -330,7 +334,7 @@
           </div>
 
           <!-- 标签 (仅在抖音可见) -->
-          <div v-if="tab.selectedPlatform === 3" class="product-section">
+          <div v-if="tab.selectedPlatform === 3 && tab.publishType === 'video'" class="product-section">
             <h3>商品链接</h3>
             <el-input
               v-model="tab.productTitle"
@@ -448,27 +452,6 @@
             </template>
           </el-dialog>
 
-          <!-- 标签 (仅在抖音可见) -->
-          <div v-if="tab.selectedPlatform === 3" class="product-section">
-            <h3>商品链接</h3>
-            <el-input
-              v-model="tab.productTitle"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品名称"
-              maxlength="200"
-              class="product-name-input"
-            />
-            <el-input
-              v-model="tab.productLink"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品链接"
-              maxlength="200"
-              class="product-link-input"
-            />
-          </div>
-
           <!-- 定时发布 -->
           <div class="schedule-section">
             <h3>定时发布</h3>
@@ -575,6 +558,7 @@ let tabCounter = 1
 
 // 获取应用状态管理
 const appStore = useAppStore()
+const accountStore = useAccountStore()
 
 // 上传相关状态
 const uploadOptionsVisible = ref(false)
@@ -618,12 +602,25 @@ const allPlatforms = [
   { key: 2, name: '视频号' },
   { key: 1, name: '小红书' }
 ]
+const PLATFORM_NAME_BY_KEY = {
+  1: '小红书',
+  2: '视频号',
+  3: '抖音',
+  4: '快手'
+}
 const platforms = computed(() => {
   if (fixedPlatformKey.value === 1) {
     return allPlatforms.filter((platform) => platform.key === 1)
   }
   return allPlatforms
 })
+
+const getAvailablePlatforms = (tab) => {
+  if (tab?.publishType === 'image') {
+    return platforms.value.filter((platform) => [1, 3].includes(platform.key))
+  }
+  return platforms.value
+}
 
 const defaultTabInit = {
   name: 'tab1',
@@ -669,6 +666,29 @@ const makeNewTab = () => {
   }
 }
 
+const getAccountsForPlatform = (platformKey) => {
+  const platformName = PLATFORM_NAME_BY_KEY[platformKey]
+  if (!platformName) return []
+  return accountStore.accounts.filter((acc) => acc.platform === platformName)
+}
+
+const setDefaultAccountForTab = (tab, force = false) => {
+  if (!tab || !tab.selectedPlatform) return
+  const platformAccounts = getAccountsForPlatform(tab.selectedPlatform)
+  if (platformAccounts.length === 0) {
+    if (force) {
+      tab.selectedAccounts = []
+    }
+    return
+  }
+  const firstAccountId = platformAccounts[0].id
+  const currentAccountId = tab.selectedAccounts[0]
+  const currentStillValid = platformAccounts.some((acc) => acc.id === currentAccountId)
+  if (force || !currentStillValid) {
+    tab.selectedAccounts = [firstAccountId]
+  }
+}
+
 // tab页数据 - 默认只有一个tab (use deep copy to avoid shared refs)
 const tabs = reactive([
   makeNewTab()
@@ -683,13 +703,18 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => accountStore.accounts,
+  () => {
+    tabs.forEach((tab) => setDefaultAccountForTab(tab))
+  },
+  { deep: true }
+)
+
 // 账号相关状态
 const accountDialogVisible = ref(false)
 const tempSelectedAccounts = ref([])
 const currentTab = ref(null)
-
-// 获取账号状态管理
-const accountStore = useAccountStore()
 
 const loadAccountsForPublish = async () => {
   try {
@@ -718,14 +743,8 @@ const loadAccountsForPublish = async () => {
 
 // 根据选择的平台获取可用账号列表
 const availableAccounts = computed(() => {
-  const platformMap = {
-    3: '抖音',
-    2: '视频号',
-    1: '小红书',
-    4: '快手'
-  }
-  const currentPlatform = currentTab.value ? platformMap[currentTab.value.selectedPlatform] : null
-  return currentPlatform ? accountStore.accounts.filter(acc => acc.platform === currentPlatform) : []
+  if (!currentTab.value) return []
+  return getAccountsForPlatform(currentTab.value.selectedPlatform)
 })
 
 // 话题相关状态
@@ -746,6 +765,7 @@ const addTab = () => {
   newTab.name = `tab${tabCounter}`
   newTab.label = `发布${tabCounter}`
   applyFixedModeToTab(newTab)
+  setDefaultAccountForTab(newTab)
   tabs.push(newTab)
   activeTab.value = newTab.name
 }
@@ -840,11 +860,24 @@ const handlePublishTypeChange = (tab) => {
     tab.publishType = resolvedPublishType.value
     return
   }
+  if (tab.publishType === 'image' && ![1, 3].includes(tab.selectedPlatform)) {
+    tab.selectedPlatform = 1
+    ElMessage.info('图文发布目前仅支持小红书和抖音，已自动切换到小红书')
+    setDefaultAccountForTab(tab, true)
+  }
+  if (tab.publishType === 'image') {
+    tab.productLink = ''
+    tab.productTitle = ''
+  }
   if (tab.fileList.length > 0) {
     tab.fileList = []
     tab.displayFileList = []
     ElMessage.info('已切换发布类型，原已选素材已清空')
   }
+}
+
+const handlePlatformChange = (tab) => {
+  setDefaultAccountForTab(tab, true)
 }
 
 // 话题相关方法
@@ -1002,8 +1035,8 @@ const confirmPublish = async (tab) => {
       dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'], // 每天发布时间点
       startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
       category: 0, //表示非原创
-      productLink: tab.productLink.trim() || '', // 商品链接
-      productTitle: tab.productTitle.trim() || '', // 商品名称
+      productLink: tab.selectedPlatform === 3 && tab.publishType === 'video' ? tab.productLink.trim() || '' : '', // 商品链接
+      productTitle: tab.selectedPlatform === 3 && tab.publishType === 'video' ? tab.productTitle.trim() || '' : '', // 商品名称
       isDraft: tab.isDraft, // 是否保存为草稿，仅视频号平台使用
       contentType: tab.publishType,
       originalDeclare: tab.originalDeclare,
