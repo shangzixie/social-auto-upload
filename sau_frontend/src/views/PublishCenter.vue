@@ -722,19 +722,18 @@ const accountDialogVisible = ref(false)
 const tempSelectedAccounts = ref([])
 const currentTab = ref(null)
 
-const loadAccountsForPublish = async () => {
+const loadAccountsForPublish = async ({ validate = false } = {}) => {
   try {
     const quickRes = await accountApi.getAccounts()
     if (quickRes.code === 200 && Array.isArray(quickRes.data)) {
-      const accountsWithPendingStatus = quickRes.data.map((account) => {
-        const updatedAccount = [...account]
-        updatedAccount[4] = '验证中'
-        return updatedAccount
-      })
-      accountStore.setAccounts(accountsWithPendingStatus)
+      accountStore.setAccounts(quickRes.data)
     }
   } catch (error) {
     console.error('快速加载账号失败:', error)
+  }
+
+  if (!validate) {
+    return
   }
 
   try {
@@ -1269,7 +1268,8 @@ const batchPublish = async () => {
 }
 
 onMounted(() => {
-  loadAccountsForPublish()
+  // Do not auto-trigger cookie validation on refresh, which launches Playwright pages.
+  loadAccountsForPublish({ validate: false })
 })
 </script>
 
