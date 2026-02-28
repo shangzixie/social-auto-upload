@@ -1,8 +1,11 @@
 # social-auto-upload
 
-`social-auto-upload` 是一个强大的自动化工具，旨在帮助内容创作者和运营者高效地将视频内容一键发布到多个国内外主流社交媒体平台。
-项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号` 以及 `TikTok` 等平台的视频上传、定时发布等功能。
-结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
+`social-auto-upload` 是一个面向自媒体运营自动化的发布工具。
+> OpenClaw 自媒体自动化运营发布引擎（Fork 增强版）
+
+本项目基于上游仓库 [dreammis/social-auto-upload](https://github.com/dreammis/social-auto-upload) 进行二次开发，核心目标是为 **OpenClaw 自动化运营** 提供可落地的发布能力。
+
+当前方向聚焦在「图文 + 视频」内容发布，支持通过 **前端页面** 或 **CLI** 完成发布流程，并持续增强跨平台统一操作体验。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
@@ -14,7 +17,6 @@
 - [🏁 快速开始](#🏁快速开始)
 - [🐇 项目背景](#🐇项目背景)
 - [📃 详细文档](#📃详细文档)
-- [🐾 交流与支持](#🐾交流与支持)
 - [🤝 贡献指南](#🤝贡献指南)
 - [📜 许可证](#📜许可证)
 - [⭐ Star History](#⭐Star-History)
@@ -32,6 +34,14 @@
     -   [x] 百家号
 -   **国外平台**:
     -   [x] TikTok
+    -   [x] X（图文能力建设中/持续完善）
+
+### 图文发布能力（重点）
+
+-   [x] 小红书图文发布（前端 / CLI）
+-   [x] 抖音图文发布（前端 / CLI）
+-   [x] X 图文发布（前端 / CLI）
+-   [x] 公众号图文发布（前端 / CLI）
 
 ### 核心功能
 
@@ -51,39 +61,19 @@
     -   [ ] 多线程/异步上传优化
     -   [ ] Slack/消息推送通知
 
-### 2025.10.30目前现状
-该项目本人很长一段时间没维护了，有比较大的问题也是能简单快速修复就修复掉
+### 当前维护方向
 
-因为我自己也在创业，每天时间都用不完
+项目当前主要围绕以下目标持续迭代：
 
-目前问题主要集中在
-1. 小红书部分，这部分是直接适用xhs这个库来实现的
-2. web 端（vue版本），这个版本是群友LeeDebug他帮忙做的（再次感谢他）
-
-因为我日常也在用，我用的不是web端，而是最初`uploader`文件夹里的版本，也就是文档里提到的部分https://sap-doc.nasdaddy.com/
-所以这里一般遇到的问题，我都会尝试去解决，一并推送到该仓库
-
-目前能遇到的问题，基本上都比较小，可能是元素变化导致的
-在初期设计的时候，其实我已经参考了某些不可变元素去选择，极大的避免了后期因为平台页面修改导致的元素变化
-
-该项目不仅仅是技术人员，有不少是非技术的从业人员，他们是没能力修复一个简单弱小的bug
-为了能帮助更多的人，所以呼吁**技术小伙伴**
-
-如果大家
-- 修复了一些bug
-- 增加一些对大家有帮助的功能
-
-请积极的提出pr，我会想尽可能的确认后合并的，在此感谢大家对于开源项目的支持，帮助更多的人
-
-我自己也会尽100%的力量，在自己项目稳定后，修bug，加更多的平台，开发出gradio版本（更易部署），大家谅解
-
----
+1. 服务 OpenClaw 自动化运营场景，优先保证可用性与稳定性。
+2. 强化图文发布链路，支持多平台统一编排与发布。
+3. 保持前端与 CLI 双入口，兼顾运营同学与技术同学的使用习惯。
 
 ## 🚀支持的平台
 
-本项目通过各平台对应的 `uploader` 模块实现视频上传功能。您可以在 `examples` 目录下找到各个平台的使用示例脚本。
+本项目通过各平台对应的 `uploader` 模块实现内容发布能力。您可以在 `examples` 目录下找到各个平台的使用示例脚本。
 
-每个示例脚本展示了如何配置和调用相应的 uploader。
+当前重点支持的平台包括：`小红书`、`抖音`、`X`、`公众号`（图文），并保留原有视频发布能力的扩展基础。
 
 ## 💾安装指南
 
@@ -145,6 +135,17 @@
 
 ## 🏁快速开始
 
+### 图文发布统一流程（前端 / CLI）
+
+1. 准备平台账号 Cookie（按 `examples/get_xxx_cookie.py` 生成）。
+2. 准备图文素材（图片、标题、标签、可选定时发布时间）。
+3. 选择入口：
+   - 前端：通过 `sau_frontend` 页面填写并提交。
+   - CLI：通过 `cli_main.py` 传参执行发布。
+4. 执行发布后在平台侧校验结果，必要时回查 `logs` 和账号 Cookie 状态。
+
+> 建议先用测试账号进行首轮联调，确认素材格式与账号权限后再切正式号。
+
 1.  **准备 Cookie**: 
     大多数平台需要登录后的 Cookie 信息才能进行操作。请参照 examples 目录下各 `get_xxx_cookie.py` 脚本（例如 get_douyin_cookie.py, get_ks_cookie.py）的说明，运行脚本以生成并保存 Cookie 文件（通常在 `cookies/[PLATFORM]_uploader/account.json`）。
 
@@ -162,7 +163,7 @@
     运行修改后的示例脚本，例如：
     ```bash
     python examples/upload_video_to_douyin.py
-    ```
+    ```   
 
 5.  **（可选）使用 CLI 发布小红书图文**:
     ```bash
@@ -207,65 +208,13 @@
 
 ## 🐇项目背景
 
-该项目最初是我个人用于自动化管理社交媒体视频发布的工具。我的主要发布策略是提前一天设置定时发布，因此项目中很多定时发布相关的逻辑是基于“第二天”的时间进行计算的。
+该项目基于 `dreammis/social-auto-upload` fork 并演进，面向 OpenClaw 的自媒体自动化运营需求。核心目标是在一个统一工程中沉淀可复用的发布能力，支持图文与视频内容在多平台的自动化分发。
 
-如果您需要立即发布或其他定制化的发布策略，欢迎研究源码或在社区提问。
+在发布方式上，项目同时提供前端与 CLI 两种入口，便于接入自动化流程、人工审核流程和日常运营流程。
 
 ## 📃详细文档
 
 更详细的文档和说明，请查看：[social-auto-upload 官方文档](https://sap-doc.nasdaddy.com/)
-
-## 🐾交流与支持
-
-[☕ Donate as u like](https://www.buymeacoffee.com/hysn2001m) - 如果您觉得这个项目对您有帮助，可以考虑赞助。
-
-如果您也是独立开发者、技术爱好者，对 #技术变现 #AI创业 #跨境电商 #自动化工具 #视频创作 等话题感兴趣，欢迎加入社群交流。
-
-### Creator
-
-<table>
-    <td align="center">
-        <a href="https://sap-doc.nasdaddy.com/">
-            <img src="media/mp.jpg" width="200px" alt="NasDaddy公众号"/>
-            <br />
-            <sub><b>微信公众号</b></sub>
-        </a>
-        <br />
-        <a href="https://github.com/dreammis/social-auto-upload/commits?author=dreammis" title="Code">💻</a>
-        <br />
-        关注公众号，后台回复 `上传` 获取加群方式
-    </td>
-    <td align="center">
-        <a href="https://sap-doc.nasdaddy.com/">
-            <img src="media/QR.png" width="200px" alt="赞赏码/入群引导"/>
-            <br />
-            <sub><b>交流群 (通过公众号获取)</b></sub>
-        </a>
-        <br />
-        <a href="https://sap-doc.nasdaddy.com/" title="Documentation">📖</a>
-        <br />
-        如果您觉得项目有用，可以考虑打赏支持一下
-    </td>
-</table>
-
-### Active Core Team
-
-<table>
-    <td align="center">
-        <a href="https://leedebug.github.io/">
-            <img src="media/edan-qrcode.png" width="200px" alt="Edan Lee"/>
-            <br />
-            <sub><b>Edan Lee</b></sub>
-        </a>
-        <br />
-        <a href="https://github.com/dreammis/social-auto-upload/commits?author=LeeDebug" title="Code">💻</a>
-        <a href="https://leedebug.github.io/" title="Documentation">📖</a>
-        <br />
-        封装了 api 接口和 web 前端管理界面
-        <br />
-        （请注明来意：进群、学习、企业咨询等）
-    </td>
-</table>
 
 ## 🤝贡献指南
 
