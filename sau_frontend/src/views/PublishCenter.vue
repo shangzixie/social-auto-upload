@@ -527,12 +527,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Upload, Plus, Close, Folder } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { materialApi } from '@/api/material'
+import { accountApi } from '@/api/account'
 
 const props = defineProps({
   fixedPublishType: {
@@ -675,6 +676,31 @@ const currentTab = ref(null)
 
 // 获取账号状态管理
 const accountStore = useAccountStore()
+
+const loadAccountsForPublish = async () => {
+  try {
+    const quickRes = await accountApi.getAccounts()
+    if (quickRes.code === 200 && Array.isArray(quickRes.data)) {
+      const accountsWithPendingStatus = quickRes.data.map((account) => {
+        const updatedAccount = [...account]
+        updatedAccount[4] = '验证中'
+        return updatedAccount
+      })
+      accountStore.setAccounts(accountsWithPendingStatus)
+    }
+  } catch (error) {
+    console.error('快速加载账号失败:', error)
+  }
+
+  try {
+    const validRes = await accountApi.getValidAccounts()
+    if (validRes.code === 200 && Array.isArray(validRes.data)) {
+      accountStore.setAccounts(validRes.data)
+    }
+  } catch (error) {
+    console.error('后台刷新账号状态失败:', error)
+  }
+}
 
 // 根据选择的平台获取可用账号列表
 const availableAccounts = computed(() => {
@@ -1186,6 +1212,10 @@ const batchPublish = async () => {
     isCancelled.value = false
   }
 }
+
+onMounted(() => {
+  loadAccountsForPublish()
+})
 </script>
 
 <style lang="scss" scoped>

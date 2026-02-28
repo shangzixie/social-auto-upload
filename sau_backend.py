@@ -28,6 +28,36 @@ CORS(app)
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
 
+
+async def validate_all_accounts_and_sync_db():
+    """校验所有账号cookie并将状态同步到数据库，返回与/getValidAccounts相同结构的数据列表。"""
+    with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT * FROM user_info''')
+        rows = cursor.fetchall()
+        rows_list = [list(row) for row in rows]
+
+        print("\n📋 当前数据表内容（校验前）：")
+        for row in rows:
+            print(row)
+
+        for row in rows_list:
+            flag = await check_cookie(row[1], row[2])
+            status = 1 if flag else 0
+            row[4] = status
+            cursor.execute(
+                '''
+                UPDATE user_info 
+                SET status = ? 
+                WHERE id = ?
+                ''',
+                (status, row[0]),
+            )
+        conn.commit()
+        print("✅ 账号状态校验完成并已同步数据库")
+        return rows_list
+
 # 获取当前目录（假设 index.html 和 assets 在这里）
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -229,34 +259,21 @@ def getAccounts():
 
 @app.route("/getValidAccounts",methods=['GET'])
 async def getValidAccounts():
-    with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-        SELECT * FROM user_info''')
-        rows = cursor.fetchall()
-        rows_list = [list(row) for row in rows]
-        print("\n📋 当前数据表内容：")
-        for row in rows:
-            print(row)
-        for row in rows_list:
-            flag = await check_cookie(row[1],row[2])
-            if not flag:
-                row[4] = 0
-                cursor.execute('''
-                UPDATE user_info 
-                SET status = ? 
-                WHERE id = ?
-                ''', (0,row[0]))
-                conn.commit()
-                print("✅ 用户状态已更新")
-        for row in rows:
-            print(row)
+    try:
+        rows_list = await validate_all_accounts_and_sync_db()
         return jsonify(
                         {
                             "code": 200,
                             "msg": None,
                             "data": rows_list
                         }),200
+    except Exception as e:
+        print(f"校验账号状态时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"校验账号状态失败: {str(e)}",
+            "data": None
+        }), 500
 
 @app.route('/deleteFile', methods=['GET'])
 def delete_file():
@@ -710,5 +727,15 @@ def sse_stream(status_queue):
             # 避免 CPU 占满
             time.sleep(0.1)
 
+
+def startup_account_status_refresh():
+    """服务启动后后台自动校验一次账号状态。"""
+    try:
+        asyncio.run(validate_all_accounts_and_sync_db())
+        print("✅ 启动时账号状态校验完成")
+    except Exception as e:
+        print(f"⚠️ 启动时账号状态校验失败: {str(e)}")
+
 if __name__ == '__main__':
+    threading.Thread(target=startup_account_status_refresh, daemon=True).start()
     app.run(host='0.0.0.0' ,port=5409)
