@@ -479,6 +479,12 @@ def postVideo():
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({
+            "code": 400,
+            "msg": f"发布失败: {str(exc)}",
+            "data": None
+        }), 400
     except Exception as exc:
         return jsonify({
             "code": 500,

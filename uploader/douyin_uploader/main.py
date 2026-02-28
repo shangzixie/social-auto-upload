@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+from pathlib import Path
 
 from playwright.async_api import Playwright, async_playwright, Page
 import os
@@ -425,31 +426,221 @@ class DouYinImage(object):
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
 
-    async def switch_to_image_mode(self, page: Page):
-        for text in ["上传图文", "图文", "发布图文"]:
-            button = page.get_by_text(text).first
-            try:
-                if await button.count():
-                    await button.click(timeout=4000)
-                    await asyncio.sleep(1)
-                    return
-            except Exception:
-                continue
+    async def switch_to_image_mode(self, page: Page, timeout_ms: int = 8000):
+        tab_texts = ["发布图文", "上传图文", "图文"]
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        while (loop.time() - start) * 1000 < timeout_ms:
+            for text in tab_texts:
+                button = page.get_by_text(text).first
+                try:
+                    if await button.count():
+                        await button.click(timeout=4000)
+                        await asyncio.sleep(0.3)
+                        return
+                except Exception:
+                    continue
+            await asyncio.sleep(0.2)
 
-    async def upload_images(self, page: Page):
+        debug_path = await self.dump_debug_artifacts(page, "switch_to_image_mode_timeout")
+        raise RuntimeError(f"未找到抖音“发布图文”入口，请检查页面结构（诊断目录：{debug_path}）")
+
+    async def upload_images(self, page: Page, timeout_ms: int = 8000):
+        await self.dismiss_blocking_overlays(page)
         upload_selectors = [
             "div[class^='container'] input[type='file']",
             "input[type='file']",
         ]
-        for selector in upload_selectors:
-            input_file = page.locator(selector).first
+
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        found_input = False
+        last_exc = None
+        while (loop.time() - start) * 1000 < timeout_ms:
+            for selector in upload_selectors:
+                input_group = page.locator(selector)
+                try:
+                    count = await input_group.count()
+                    if count <= 0:
+                        continue
+                    ordered_inputs = []
+                    fallback_inputs = []
+                    input_candidates = []
+                    if hasattr(input_group, "nth"):
+                        for idx in range(count):
+                            input_candidates.append(input_group.nth(idx))
+                    elif hasattr(input_group, "first"):
+                        input_candidates.append(input_group.first)
+                    else:
+                        input_candidates.append(input_group)
+
+                    for input_file in input_candidates:
+                        is_image_input = False
+                        try:
+                            accept = (await input_file.get_attribute("accept") or "").lower()
+                            is_image_input = "image/" in accept or "image" in accept
+                        except Exception:
+                            is_image_input = False
+                        if is_image_input:
+                            ordered_inputs.append(input_file)
+                        else:
+                            fallback_inputs.append(input_file)
+
+                    for input_file in ordered_inputs + fallback_inputs:
+                        try:
+                            found_input = True
+                            await input_file.set_input_files(self.file_paths)
+                            return
+                        except Exception as exc:
+                            last_exc = exc
+                            continue
+                except Exception as exc:
+                    last_exc = exc
+                    continue
+            await asyncio.sleep(0.2)
+
+        debug_path = await self.dump_debug_artifacts(page, "upload_images_timeout")
+        if found_input and last_exc is not None:
+            raise RuntimeError(
+                f"抖音图文上传输入框已找到，但设置文件失败：{last_exc}（诊断目录：{debug_path}）"
+            )
+        raise RuntimeError(f"未找到抖音图文上传输入框，请检查页面结构（诊断目录：{debug_path}）")
+
+    async def dismiss_blocking_overlays(self, page: Page):
+        dismiss_texts = ["我知道了", "知道了", "跳过", "稍后再说"]
+        if not hasattr(page, "get_by_text"):
+            return
+        for text in dismiss_texts:
             try:
-                if await input_file.count():
-                    await input_file.set_input_files(self.file_paths)
+                button = page.get_by_text(text).first
+                if await button.count():
+                    await button.click(timeout=1000)
+                    await asyncio.sleep(0.2)
                     return
             except Exception:
                 continue
-        raise RuntimeError("未找到抖音图文上传输入框，请检查页面结构")
+
+    async def dump_debug_artifacts(self, page: Page, reason: str) -> str:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = Path("logs") / "douyin_debug" / f"{timestamp}_{reason}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        url_text = ""
+        try:
+            url_text = str(page.url)
+        except Exception:
+            url_text = ""
+
+        try:
+            (out_dir / "meta.txt").write_text(f"reason={reason}\nurl={url_text}\n", encoding="utf-8")
+        except Exception:
+            pass
+
+        try:
+            files_text = "\n".join(
+                f"{path}\texists={Path(path).exists()}" for path in self.file_paths
+            )
+            (out_dir / "files.txt").write_text(files_text + "\n", encoding="utf-8")
+        except Exception:
+            pass
+
+        try:
+            if hasattr(page, "screenshot"):
+                await page.screenshot(path=str(out_dir / "page.png"), full_page=True)
+        except Exception:
+            pass
+
+        try:
+            if hasattr(page, "content"):
+                html = await page.content()
+                (out_dir / "page.html").write_text(html, encoding="utf-8")
+        except Exception:
+            pass
+
+        return str(out_dir)
+
+    async def wait_for_image_editor_ready(self, page: Page, timeout_ms: int = 30000):
+        editor_selectors = [
+            "input[placeholder*='作品标题']",
+            "input[placeholder*='输入标题']",
+            "textarea[placeholder*='标题']",
+            "div[contenteditable='true'][role='textbox']",
+            "div[contenteditable='true'][data-placeholder*='简介']",
+            "div[contenteditable='true'][data-placeholder*='描述']",
+        ]
+        upload_error_selectors = [
+            "text=不支持该格式",
+            "text=不支持gif格式",
+            "text=上传失败",
+            "text=格式不支持",
+            "text=图片上传失败",
+            "text=文件上传失败",
+        ]
+
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        while (loop.time() - start) * 1000 < timeout_ms:
+            for selector in editor_selectors:
+                try:
+                    locator = page.locator(selector).first
+                    if await locator.count():
+                        return
+                except Exception:
+                    continue
+
+            for selector in upload_error_selectors:
+                try:
+                    if await self.error_text_visible(page, selector):
+                        raise RuntimeError(f"抖音图文素材上传失败：检测到提示“{selector.replace('text=', '')}”")
+                except RuntimeError:
+                    raise
+                except Exception:
+                    continue
+
+            await asyncio.sleep(0.5)
+
+        raise RuntimeError("抖音图文素材上传后未进入编辑页，请确认图片格式为 jpg/jpeg/png/webp 且文件可用")
+
+    async def wait_for_image_editor_url(self, page: Page, timeout_ms: int = 45000):
+        upload_error_selectors = [
+            "text=不支持该格式",
+            "text=不支持gif格式",
+            "text=上传失败",
+            "text=格式不支持",
+            "text=图片上传失败",
+            "text=文件上传失败",
+        ]
+        target_path = "/creator-micro/content/post/image"
+
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        while (loop.time() - start) * 1000 < timeout_ms:
+            if target_path in page.url:
+                return
+
+            for selector in upload_error_selectors:
+                try:
+                    if await self.error_text_visible(page, selector):
+                        raise RuntimeError(f"抖音图文素材上传失败：检测到提示“{selector.replace('text=', '')}”")
+                except RuntimeError:
+                    raise
+                except Exception:
+                    continue
+
+            await asyncio.sleep(0.5)
+
+        raise RuntimeError(
+            f"抖音图文素材上传后未跳转到编辑页({target_path})，当前页面：{page.url}"
+        )
+
+    async def error_text_visible(self, page: Page, selector: str) -> bool:
+        locator = page.locator(selector).first
+        if not await locator.count():
+            return False
+        try:
+            return await locator.is_visible()
+        except Exception:
+            return False
 
     async def fill_title_and_desc(self, page: Page):
         douyin_logger.info('  [-] 正在填充图文标题和正文...')
@@ -483,6 +674,8 @@ class DouYinImage(object):
 
         desc_selectors = [
             "div[contenteditable='true'][role='textbox']",
+            "div[contenteditable='true'][data-placeholder*='简介']",
+            "div[contenteditable='true'][data-placeholder*='描述']",
             "div[contenteditable='true']",
             "textarea[placeholder*='作品简介']",
             "textarea[placeholder*='输入作品简介']",
@@ -503,6 +696,29 @@ class DouYinImage(object):
                 continue
         raise RuntimeError("未找到抖音图文正文输入框，请检查页面结构")
 
+    async def click_publish_button(self, page: Page):
+        # Prefer an exact "发布" action button to avoid clicking unrelated
+        # controls such as "高消发布"/"发布视频"/"发布图文" tab items.
+        publish_button = page.get_by_role("button", name="发布", exact=True).first
+        if await publish_button.count():
+            await publish_button.click()
+            return
+
+        fallback_selectors = [
+            "button:has-text('发布'):not(:has-text('高消发布')):not(:has-text('发布视频')):not(:has-text('发布图文'))",
+            "button.semi-button-primary:has-text('发布')",
+        ]
+        for selector in fallback_selectors:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count():
+                    await locator.click()
+                    return
+            except Exception:
+                continue
+
+        raise RuntimeError("未找到抖音图文发布按钮，请检查页面结构")
+
     async def upload(self, playwright: Playwright) -> None:
         if self.local_executable_path:
             browser = await playwright.chromium.launch(headless=self.headless, executable_path=self.local_executable_path)
@@ -517,22 +733,25 @@ class DouYinImage(object):
 
         await self.switch_to_image_mode(page)
         await self.upload_images(page)
-        await asyncio.sleep(8)
+        await self.wait_for_image_editor_url(page, timeout_ms=45000)
+        await self.wait_for_image_editor_ready(page, timeout_ms=30000)
         await self.fill_title_and_desc(page)
 
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
 
-        while True:
+        loop = asyncio.get_running_loop()
+        publish_start = loop.time()
+        while (loop.time() - publish_start) < 90:
             try:
                 if self.publish_date != 0:
-                    schedule_button = page.get_by_role("button", name="定时发布").first
+                    schedule_button = page.get_by_role("button", name="定时发布", exact=True).first
                     if await schedule_button.count():
                         await schedule_button.click()
                     else:
-                        await page.get_by_role("button", name="发布").first.click()
+                        await self.click_publish_button(page)
                 else:
-                    await page.get_by_role("button", name="发布").first.click()
+                    await self.click_publish_button(page)
                 await page.wait_for_url(
                     "https://creator.douyin.com/creator-micro/content/manage**",
                     timeout=3000
@@ -542,6 +761,9 @@ class DouYinImage(object):
             except Exception:
                 douyin_logger.info("  [-] 图文正在发布中...")
                 await asyncio.sleep(0.5)
+        else:
+            debug_path = await self.dump_debug_artifacts(page, "publish_timeout")
+            raise RuntimeError(f"抖音图文发布超时，请检查页面状态（诊断目录：{debug_path}）")
 
         await context.storage_state(path=self.account_file)
         douyin_logger.success('  [-]cookie更新完毕！')
@@ -552,4 +774,3 @@ class DouYinImage(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
-
