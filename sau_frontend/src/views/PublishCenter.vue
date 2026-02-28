@@ -514,7 +514,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { Upload, Plus, Close, Folder } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAccountStore } from '@/stores/account'
@@ -644,6 +644,14 @@ const tabs = reactive([
   makeNewTab()
 ])
 applyFixedModeToTab(tabs[0])
+
+watch(
+  [resolvedPublishType, fixedPlatformKey],
+  () => {
+    tabs.forEach((tab) => applyFixedModeToTab(tab))
+  },
+  { immediate: true }
+)
 
 // 账号相关状态
 const accountDialogVisible = ref(false)
