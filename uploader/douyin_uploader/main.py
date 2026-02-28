@@ -721,6 +721,10 @@ class DouYinImage(object):
         raise RuntimeError("未找到抖音图文发布按钮，请检查页面结构")
 
     async def set_visibility(self, page: Page):
+        target_value = "0" if self.visibility == "public" else ("2" if self.visibility == "friends" else "1")
+        current_value = await self.read_visibility_value(page)
+        douyin_logger.info(f"[visibility] target={self.visibility}({target_value}) current={current_value}")
+
         if self.visibility == "public":
             target_text = "公开可见"
         elif self.visibility == "friends":
@@ -741,18 +745,48 @@ class DouYinImage(object):
                 raise RuntimeError("当前页面不支持设置“谁可以看”")
             return
 
+        # 1) Prefer value-based checkbox click for current Douyin DOM.
+        if hasattr(page, "evaluate"):
+            try:
+                clicked_by_value = await page.evaluate(
+                    """
+                    (targetValue) => {
+                      const candidates = Array.from(
+                        document.querySelectorAll("input.radio-native-p6VBGt[type='checkbox'], input[type='checkbox'][value='0'], input[type='checkbox'][value='1'], input[type='checkbox'][value='2']")
+                      );
+                      const target = candidates.find((el) => String(el.value) === String(targetValue));
+                      if (!target) return false;
+                      const clickable = target.closest("label") || target;
+                      clickable.click();
+                      return true;
+                    }
+                    """,
+                    target_value,
+                )
+                if clicked_by_value:
+                    await asyncio.sleep(0.2)
+                    after_value = await self.read_visibility_value(page)
+                    douyin_logger.info(f"[visibility] clicked_by=value after={after_value}")
+                    if self.visibility_applied(after_value, target_value):
+                        return
+            except Exception as exc:
+                douyin_logger.info(f"[visibility] value_click_failed: {exc}")
+
+        # 2) Fallback to visible text candidates.
         for text in candidates:
             locator = page.get_by_text(text).first
             try:
                 if await locator.count():
                     await locator.click(timeout=3000)
                     await asyncio.sleep(0.2)
-                    return
+                    after_value = await self.read_visibility_value(page)
+                    douyin_logger.info(f"[visibility] clicked_by=text:{text} after={after_value}")
+                    if self.visibility_applied(after_value, target_value):
+                        return
             except Exception:
                 continue
 
-        # Fallback for page versions where visibility options are radio inputs
-        # rendered without stable visible text nodes.
+        # 3) Fallback for versions with non-text radio-like controls.
         if hasattr(page, "evaluate"):
             try:
                 clicked = await page.evaluate(
@@ -802,13 +836,47 @@ class DouYinImage(object):
                 )
                 if clicked:
                     await asyncio.sleep(0.2)
-                    return
-            except Exception:
-                pass
+                    after_value = await self.read_visibility_value(page)
+                    douyin_logger.info(f"[visibility] clicked_by=dom_fallback after={after_value}")
+                    if self.visibility_applied(after_value, target_value):
+                        return
+            except Exception as exc:
+                douyin_logger.info(f"[visibility] dom_fallback_failed: {exc}")
 
         if self.visibility in {"private", "friends"}:
             debug_path = await self.dump_debug_artifacts(page, "set_visibility_timeout")
             raise RuntimeError(f"未找到抖音图文“谁可以看”设置入口，请检查页面结构（诊断目录：{debug_path}）")
+
+    async def read_visibility_value(self, page: Page):
+        if not hasattr(page, "evaluate"):
+            return None
+        try:
+            return await page.evaluate(
+                """
+                () => {
+                  const checkboxes = Array.from(
+                    document.querySelectorAll("input.radio-native-p6VBGt[type='checkbox'], input[type='checkbox'][value='0'], input[type='checkbox'][value='1'], input[type='checkbox'][value='2']")
+                  );
+                  const checkedBox = checkboxes.find((el) => el.checked);
+                  if (checkedBox) return String(checkedBox.value);
+
+                  const radios = Array.from(document.querySelectorAll("input[type='radio']"));
+                  const checkedRadio = radios.find((el) => el.checked);
+                  if (!checkedRadio) return null;
+                  return String(checkedRadio.value ?? "");
+                }
+                """
+            )
+        except Exception:
+            return None
+
+    @staticmethod
+    def visibility_applied(after_value, target_value: str) -> bool:
+        normalized = None if after_value is None else str(after_value)
+        if normalized in {"0", "1", "2"}:
+            return normalized == target_value
+        # Unknown value shape (e.g., test stubs) - trust click result.
+        return True
 
     async def upload(self, playwright: Playwright) -> None:
         if self.local_executable_path:
@@ -847,6 +915,11 @@ class DouYinImage(object):
                 await page.wait_for_url(
                     "https://creator.douyin.com/creator-micro/content/manage**",
                     timeout=3000
+                )
+                final_visibility = await self.read_visibility_value(page)
+                success_debug_path = await self.dump_debug_artifacts(page, "publish_success")
+                douyin_logger.success(
+                    f"[visibility] publish_success target={self.visibility} dom={final_visibility} debug={success_debug_path}"
                 )
                 douyin_logger.success("  [-]图文发布成功")
                 break

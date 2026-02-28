@@ -1,7 +1,7 @@
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 
 if "loguru" not in sys.modules:
@@ -513,6 +513,91 @@ class DouyinImageUploadErrorDetectionTests(unittest.IsolatedAsyncioTestCase):
         await uploader.set_visibility(page)
 
         self.assertEqual(page.clicked_text, "好友可见")
+
+    async def test_upload_success_dumps_publish_success_artifacts(self):
+        class _FakePage:
+            def __init__(self):
+                self.url = "https://creator.douyin.com/creator-micro/content/upload"
+
+            async def goto(self, _url):
+                return None
+
+            async def wait_for_url(self, url, timeout=None):
+                if "content/manage" in url:
+                    self.url = "https://creator.douyin.com/creator-micro/content/manage"
+                return None
+
+        class _FakeContext:
+            def __init__(self, page):
+                self.page = page
+                self.saved_path = None
+
+            async def new_page(self):
+                return self.page
+
+            async def storage_state(self, path=None):
+                self.saved_path = path
+                return None
+
+            async def close(self):
+                return None
+
+        class _FakeBrowser:
+            def __init__(self, context):
+                self.context = context
+
+            async def new_context(self, storage_state=None):
+                return self.context
+
+            async def close(self):
+                return None
+
+        class _FakeChromium:
+            def __init__(self, browser):
+                self.browser = browser
+
+            async def launch(self, **kwargs):
+                return self.browser
+
+        class _FakePlaywright:
+            def __init__(self, chromium):
+                self.chromium = chromium
+
+        uploader = DouYinImage(
+            title="标题",
+            file_paths=["1.png"],
+            tags=[],
+            publish_date=0,
+            account_file="cookies/douyin.json",
+            body="正文",
+            visibility="friends",
+        )
+        page = _FakePage()
+        context = _FakeContext(page)
+        browser = _FakeBrowser(context)
+        playwright = _FakePlaywright(_FakeChromium(browser))
+
+        uploader.switch_to_image_mode = AsyncMock()
+        uploader.upload_images = AsyncMock()
+        uploader.wait_for_image_editor_url = AsyncMock()
+        uploader.wait_for_image_editor_ready = AsyncMock()
+        uploader.fill_title_and_desc = AsyncMock()
+        uploader.set_visibility = AsyncMock()
+        uploader.click_publish_button = AsyncMock()
+        uploader.read_visibility_value = AsyncMock(return_value="2")
+        uploader.dump_debug_artifacts = AsyncMock(return_value="logs/douyin_debug/fake_publish_success")
+
+        async def _identity_context(ctx):
+            return ctx
+
+        async def _fast_sleep(_seconds):
+            return None
+
+        with patch("uploader.douyin_uploader.main.set_init_script", side_effect=_identity_context):
+            with patch("uploader.douyin_uploader.main.asyncio.sleep", side_effect=_fast_sleep):
+                await uploader.upload(playwright)
+
+        uploader.dump_debug_artifacts.assert_awaited_with(page, "publish_success")
 
 
 if __name__ == "__main__":
