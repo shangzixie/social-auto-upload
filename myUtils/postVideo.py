@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 from conf import BASE_DIR
-from uploader.douyin_uploader.main import DouYinVideo
+from uploader.douyin_uploader.main import DouYinVideo, DouYinImage
 from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo, XiaoHongShuImage
@@ -31,10 +31,22 @@ def post_video_tencent(title,files,tags,account_file,category=TencentZoneTypes.L
 
 def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LIFESTYLE.value,enableTimer=False,videos_per_day = 1, daily_times=None,start_days = 0,
                       thumbnail_path = '',
-                      productLink = '', productTitle = ''):
+                      productLink = '', productTitle = '', content_type='video', body=''):
     # 生成文件的完整路径
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
+    if content_type == 'image':
+        publish_datetime = 0
+        if enableTimer:
+            publish_datetime = generate_schedule_time_next_day(1, videos_per_day, daily_times, start_days)[0]
+        for cookie in account_file:
+            print(f"图文文件数量：{len(files)}")
+            print(f"标题：{title}")
+            print(f"Hashtag：{tags}")
+            app = DouYinImage(title, files, tags, publish_datetime, cookie, body)
+            asyncio.run(app.main(), debug=False)
+        return
+
     if enableTimer:
         publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days)
     else:

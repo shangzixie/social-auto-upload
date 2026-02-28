@@ -364,7 +364,7 @@
             />
           </div>
 
-          <div v-if="tab.publishType === 'image' && tab.selectedPlatform === 1" class="title-section">
+          <div v-if="tab.publishType === 'image' && [1, 3].includes(tab.selectedPlatform)" class="title-section">
             <h3>正文</h3>
             <el-input
               v-model="tab.body"
@@ -557,7 +557,7 @@ const props = defineProps({
 
 const resolvedPublishType = computed(() => (props.fixedPublishType === 'image' ? 'image' : 'video'))
 const isPublishTypeFixed = computed(() => props.fixedPublishType === 'video' || props.fixedPublishType === 'image')
-const fixedPlatformKey = computed(() => (props.fixedPublishType === 'image' ? 1 : null))
+const fixedPlatformKey = computed(() => null)
 
 // API base URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
@@ -964,10 +964,10 @@ const confirmPublish = async (tab) => {
       reject(new Error('请选择发布账号'))
       return
     }
-    if (tab.publishType === 'image' && tab.selectedPlatform !== 1) {
-      ElMessage.error('图文发布首版仅支持小红书平台')
+    if (tab.publishType === 'image' && ![1, 3].includes(tab.selectedPlatform)) {
+      ElMessage.error('图文发布目前仅支持小红书和抖音平台')
       tab.publishing = false
-      reject(new Error('图文发布首版仅支持小红书平台'))
+      reject(new Error('图文发布目前仅支持小红书和抖音平台'))
       return
     }
     if (tab.publishType === 'image') {

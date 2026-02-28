@@ -66,3 +66,19 @@ def validate_xiaohongshu_publish_payload(content_type, file_list):
     invalid_files = [file_name for file_name in file_list if not is_image_file(file_name)]
     if invalid_files:
         raise ValueError("小红书图文仅支持图片文件（jpg/jpeg/png/webp）")
+
+
+def validate_douyin_publish_payload(content_type, file_list):
+    normalized_type = normalize_content_type(content_type)
+    if normalized_type != "image":
+        return
+
+    if not file_list:
+        raise ValueError("抖音图文发布至少需要 1 张图片")
+
+    if len(file_list) > 9:
+        raise ValueError("抖音图文单次最多支持 9 张图片")
+
+    invalid_files = [file_name for file_name in file_list if not is_image_file(file_name)]
+    if invalid_files:
+        raise ValueError("抖音图文仅支持图片文件（jpg/jpeg/png/webp）")

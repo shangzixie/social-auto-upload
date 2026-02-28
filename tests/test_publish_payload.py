@@ -4,6 +4,7 @@ from myUtils.publish_payload import (
     normalize_visibility,
     normalize_original_declare,
     normalize_content_type,
+    validate_douyin_publish_payload,
     validate_xiaohongshu_publish_payload,
 )
 
@@ -34,6 +35,27 @@ class PublishPayloadTests(unittest.TestCase):
 
     def test_validate_xiaohongshu_image_accepts_png(self):
         validate_xiaohongshu_publish_payload(
+            content_type="image",
+            file_list=["a.png", "b.jpeg", "c.webp"],
+        )
+
+    def test_validate_douyin_image_rejects_non_image(self):
+        with self.assertRaises(ValueError):
+            validate_douyin_publish_payload(
+                content_type="image",
+                file_list=["demo.mp4"],
+            )
+
+    def test_validate_douyin_image_limit(self):
+        files = [f"img_{i}.jpg" for i in range(10)]
+        with self.assertRaises(ValueError):
+            validate_douyin_publish_payload(
+                content_type="image",
+                file_list=files,
+            )
+
+    def test_validate_douyin_image_accepts_png(self):
+        validate_douyin_publish_payload(
             content_type="image",
             file_list=["a.png", "b.jpeg", "c.webp"],
         )

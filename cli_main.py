@@ -5,7 +5,7 @@ from os.path import exists
 from pathlib import Path
 
 from conf import BASE_DIR
-from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
+from uploader.douyin_uploader.main import douyin_setup, DouYinVideo, DouYinImage
 from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
@@ -35,6 +35,8 @@ async def main():
     actions = list(get_cli_action())
     if "xhs-image-upload" not in actions:
         actions.append("xhs-image-upload")
+    if "douyin-image-upload" not in actions:
+        actions.append("douyin-image-upload")
     for action in actions:
         action_parser = subparsers.add_parser(action, help=f'{action} operation')
         if action == 'login':
@@ -55,6 +57,14 @@ async def main():
             action_parser.add_argument("--original-declare", action="store_true", help="Enable original declaration")
             action_parser.add_argument("--visibility", choices=["public", "private"], default="public",
                                        help="Visibility scope: public or private")
+        elif action == 'douyin-image-upload':
+            action_parser.add_argument("image_files", nargs="+", help="Paths to image files (max 9)")
+            action_parser.add_argument("--title", required=True, help="Post title")
+            action_parser.add_argument("--body", default="", help="Post body text")
+            action_parser.add_argument("--tags", default="", help="Comma-separated tags, e.g. 美食,探店")
+            action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
+                                       help="0 for immediate, 1 for scheduled", default=0)
+            action_parser.add_argument('-t', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -71,6 +81,21 @@ async def main():
             parser.error("At least one image file is required.")
         if len(args.image_files) > 9:
             parser.error("xhs-image-upload supports at most 9 images.")
+        for image_file in args.image_files:
+            if not exists(image_file):
+                raise FileNotFoundError(f'Could not find image file at {image_file}')
+            suffix = Path(image_file).suffix.lower()
+            if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+                parser.error(f"Unsupported image format: {image_file}")
+        if args.publish_type == 1 and not args.schedule:
+            parser.error("The schedule must must be specified for scheduled publishing.")
+    if args.action == 'douyin-image-upload':
+        if args.platform != SOCIAL_MEDIA_DOUYIN:
+            parser.error("douyin-image-upload only supports platform 'douyin'.")
+        if len(args.image_files) == 0:
+            parser.error("At least one image file is required.")
+        if len(args.image_files) > 9:
+            parser.error("douyin-image-upload supports at most 9 images.")
         for image_file in args.image_files:
             if not exists(image_file):
                 raise FileNotFoundError(f'Could not find image file at {image_file}')
@@ -143,6 +168,25 @@ async def main():
             account_file,
             args.original_declare,
             args.visibility,
+        )
+        await app.main()
+    elif args.action == 'douyin-image-upload':
+        if args.publish_type == 0:
+            print("Uploading images immediately...")
+            publish_date = 0
+        else:
+            print("Scheduling image post...")
+            publish_date = parse_schedule(args.schedule)
+
+        tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
+        await douyin_setup(account_file, handle=False)
+        app = DouYinImage(
+            args.title,
+            args.image_files,
+            tags,
+            publish_date,
+            account_file,
+            args.body,
         )
         await app.main()
 

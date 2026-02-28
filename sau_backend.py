@@ -16,6 +16,7 @@ from myUtils.publish_payload import (
     normalize_content_type,
     normalize_original_declare,
     normalize_visibility,
+    validate_douyin_publish_payload,
     validate_xiaohongshu_publish_payload,
 )
 
@@ -436,10 +437,12 @@ def postVideo():
     try:
         if type == 1:
             validate_xiaohongshu_publish_payload(content_type, file_list)
+        elif type == 3:
+            validate_douyin_publish_payload(content_type, file_list)
         elif content_type == 'image':
             return jsonify({
                 "code": 400,
-                "msg": "图文发布首版仅支持小红书平台",
+                "msg": "图文发布目前仅支持小红书和抖音平台",
                 "data": None
             }), 400
     except ValueError as exc:
@@ -472,7 +475,7 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, content_type, body)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)

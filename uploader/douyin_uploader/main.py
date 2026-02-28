@@ -392,3 +392,164 @@ class DouYinVideo(object):
             await self.upload(playwright)
 
 
+class DouYinImage(object):
+    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, body=''):
+        self.title = title
+        self.file_paths = [str(file_path) for file_path in file_paths]
+        self.tags = tags
+        self.body = str(body or "").strip()
+        self.publish_date = publish_date
+        self.account_file = account_file
+        self.date_format = '%Y年%m月%d日 %H:%M'
+        self.local_executable_path = LOCAL_CHROME_PATH
+        self.headless = LOCAL_CHROME_HEADLESS
+
+    @staticmethod
+    def build_note_content(body, tags):
+        body_text = str(body or "").strip()
+        tag_tokens = [f"#{str(tag).strip()}" for tag in tags if str(tag).strip()]
+        tags_text = " ".join(tag_tokens)
+        if body_text and tags_text:
+            return f"{body_text}\n{tags_text}"
+        return body_text or tags_text
+
+    async def set_schedule_time_douyin(self, page, publish_date):
+        label_element = page.locator("[class^='radio']:has-text('定时发布')")
+        await label_element.click()
+        await asyncio.sleep(1)
+        publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M")
+        await asyncio.sleep(1)
+        await page.locator('.semi-input[placeholder="日期和时间"]').click()
+        await page.keyboard.press("Control+KeyA")
+        await page.keyboard.type(str(publish_date_hour))
+        await page.keyboard.press("Enter")
+        await asyncio.sleep(1)
+
+    async def switch_to_image_mode(self, page: Page):
+        for text in ["上传图文", "图文", "发布图文"]:
+            button = page.get_by_text(text).first
+            try:
+                if await button.count():
+                    await button.click(timeout=4000)
+                    await asyncio.sleep(1)
+                    return
+            except Exception:
+                continue
+
+    async def upload_images(self, page: Page):
+        upload_selectors = [
+            "div[class^='container'] input[type='file']",
+            "input[type='file']",
+        ]
+        for selector in upload_selectors:
+            input_file = page.locator(selector).first
+            try:
+                if await input_file.count():
+                    await input_file.set_input_files(self.file_paths)
+                    return
+            except Exception:
+                continue
+        raise RuntimeError("未找到抖音图文上传输入框，请检查页面结构")
+
+    async def fill_title_and_desc(self, page: Page):
+        douyin_logger.info('  [-] 正在填充图文标题和正文...')
+        title_selectors = [
+            "input[placeholder*='作品标题']",
+            "input[placeholder*='输入标题']",
+            "textarea[placeholder*='标题']",
+        ]
+        title_filled = False
+        for selector in title_selectors:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    await locator.fill(self.title[:30], timeout=3000)
+                    title_filled = True
+                    break
+            except Exception:
+                continue
+        if not title_filled:
+            fallback_title = page.locator(".notranslate").first
+            if await fallback_title.count():
+                await fallback_title.click()
+                await page.keyboard.press("Control+KeyA")
+                await page.keyboard.press("Delete")
+                await page.keyboard.type(self.title[:30])
+
+        note_text = self.build_note_content(self.body, self.tags)
+        if not note_text:
+            return
+
+        desc_selectors = [
+            "div[contenteditable='true'][role='textbox']",
+            "div[contenteditable='true']",
+            "textarea[placeholder*='作品简介']",
+            "textarea[placeholder*='输入作品简介']",
+            ".zone-container",
+            ".notranslate",
+        ]
+        for selector in desc_selectors:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count():
+                    await locator.click(timeout=3000)
+                    if selector.startswith("textarea"):
+                        await locator.fill(note_text)
+                    else:
+                        await page.keyboard.type(note_text)
+                    return
+            except Exception:
+                continue
+        raise RuntimeError("未找到抖音图文正文输入框，请检查页面结构")
+
+    async def upload(self, playwright: Playwright) -> None:
+        if self.local_executable_path:
+            browser = await playwright.chromium.launch(headless=self.headless, executable_path=self.local_executable_path)
+        else:
+            browser = await playwright.chromium.launch(headless=self.headless)
+        context = await browser.new_context(storage_state=f"{self.account_file}")
+        context = await set_init_script(context)
+        page = await context.new_page()
+        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+        douyin_logger.info(f'[+]正在上传抖音图文，共{len(self.file_paths)}张')
+
+        await self.switch_to_image_mode(page)
+        await self.upload_images(page)
+        await asyncio.sleep(8)
+        await self.fill_title_and_desc(page)
+
+        if self.publish_date != 0:
+            await self.set_schedule_time_douyin(page, self.publish_date)
+
+        while True:
+            try:
+                if self.publish_date != 0:
+                    schedule_button = page.get_by_role("button", name="定时发布").first
+                    if await schedule_button.count():
+                        await schedule_button.click()
+                    else:
+                        await page.get_by_role("button", name="发布").first.click()
+                else:
+                    await page.get_by_role("button", name="发布").first.click()
+                await page.wait_for_url(
+                    "https://creator.douyin.com/creator-micro/content/manage**",
+                    timeout=3000
+                )
+                douyin_logger.success("  [-]图文发布成功")
+                break
+            except Exception:
+                douyin_logger.info("  [-] 图文正在发布中...")
+                await asyncio.sleep(0.5)
+
+        await context.storage_state(path=self.account_file)
+        douyin_logger.success('  [-]cookie更新完毕！')
+        await asyncio.sleep(2)
+        await context.close()
+        await browser.close()
+
+    async def main(self):
+        async with async_playwright() as playwright:
+            await self.upload(playwright)
+
