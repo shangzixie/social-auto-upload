@@ -28,9 +28,13 @@
               <el-icon><Picture /></el-icon>
               <span>素材管理</span>
             </el-menu-item>
-            <el-menu-item index="/publish-center">
+            <el-menu-item index="/publish-video">
               <el-icon><Upload /></el-icon>
-              <span>发布中心</span>
+              <span>视频发布</span>
+            </el-menu-item>
+            <el-menu-item index="/publish-image">
+              <el-icon><Picture /></el-icon>
+              <span>图文发布</span>
             </el-menu-item>
             <el-menu-item index="/website">
               <el-icon><Monitor /></el-icon>

@@ -12,6 +12,7 @@ from flask import Flask, request, jsonify, Response, render_template, send_from_
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.publish_payload import normalize_content_type, validate_xiaohongshu_publish_payload
 
 active_queues = {}
 app = Flask(__name__)
@@ -399,6 +400,7 @@ def postVideo():
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    content_type = normalize_content_type(data.get('contentType'))
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -406,10 +408,36 @@ def postVideo():
     # 打印获取到的数据（仅作为示例）
     print("File List:", file_list)
     print("Account List:", account_list)
+    try:
+        if type == 1:
+            validate_xiaohongshu_publish_payload(content_type, file_list)
+        elif content_type == 'image':
+            return jsonify({
+                "code": 400,
+                "msg": "图文发布首版仅支持小红书平台",
+                "data": None
+            }), 400
+    except ValueError as exc:
+        return jsonify({
+            "code": 400,
+            "msg": str(exc),
+            "data": None
+        }), 400
+
     match type:
         case 1:
-            post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
+            post_video_xhs(
+                title,
+                file_list,
+                tags,
+                account_list,
+                category,
+                enableTimer,
+                videos_per_day,
+                daily_times,
+                start_days,
+                content_type,
+            )
         case 2:
             post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                                start_days, is_draft)

@@ -366,3 +366,94 @@ class XiaoHongShuVideo(object):
             await self.upload(playwright)
 
 
+class XiaoHongShuImage(object):
+    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file):
+        self.title = title
+        self.file_paths = [str(file_path) for file_path in file_paths]
+        self.tags = tags
+        self.publish_date = publish_date
+        self.account_file = account_file
+        self.local_executable_path = LOCAL_CHROME_PATH
+        self.headless = LOCAL_CHROME_HEADLESS
+
+    async def set_schedule_time_xiaohongshu(self, page, publish_date):
+        label_element = page.locator("label:has-text('定时发布')")
+        await label_element.click()
+        await asyncio.sleep(1)
+        publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M")
+        await page.locator('.el-input__inner[placeholder="选择日期和时间"]').click()
+        await page.keyboard.press("Control+KeyA")
+        await page.keyboard.type(str(publish_date_hour))
+        await page.keyboard.press("Enter")
+        await asyncio.sleep(1)
+
+    async def fill_title_and_tags(self, page):
+        await asyncio.sleep(1)
+        xiaohongshu_logger.info('  [-] 正在填充标题和话题...')
+        title_container = page.locator('div.plugin.title-container').locator('input.d-text')
+        if await title_container.count():
+            await title_container.fill(self.title[:20])
+        else:
+            titlecontainer = page.locator(".notranslate")
+            await titlecontainer.click()
+            await page.keyboard.press("Backspace")
+            await page.keyboard.press("Control+KeyA")
+            await page.keyboard.press("Delete")
+            await page.keyboard.type(self.title)
+            await page.keyboard.press("Enter")
+        css_selector = ".ql-editor"
+        for tag in self.tags:
+            await page.type(css_selector, "#" + tag)
+            await page.press(css_selector, "Space")
+        xiaohongshu_logger.info(f'总共添加{len(self.tags)}个话题')
+
+    async def upload(self, playwright: Playwright) -> None:
+        if self.local_executable_path:
+            browser = await playwright.chromium.launch(headless=self.headless, executable_path=self.local_executable_path)
+        else:
+            browser = await playwright.chromium.launch(headless=self.headless)
+        context = await browser.new_context(
+            viewport={"width": 1600, "height": 900},
+            storage_state=f"{self.account_file}"
+        )
+        context = await set_init_script(context)
+        page = await context.new_page()
+        await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=normal")
+        await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=normal")
+        xiaohongshu_logger.info(f'[+]正在上传图文，共{len(self.file_paths)}张')
+
+        await page.locator("input.upload-input").set_input_files(self.file_paths)
+
+        # 图文上传完成状态在不同版本页面结构差异较大，先采用保守等待。
+        await asyncio.sleep(8)
+
+        await self.fill_title_and_tags(page)
+        if self.publish_date != 0:
+            await self.set_schedule_time_xiaohongshu(page, self.publish_date)
+
+        while True:
+            try:
+                if self.publish_date != 0:
+                    await page.locator('button:has-text("定时发布")').click()
+                else:
+                    await page.locator('button:has-text("发布")').click()
+                await page.wait_for_url(
+                    "https://creator.xiaohongshu.com/publish/success?**",
+                    timeout=3000
+                )
+                xiaohongshu_logger.success("  [-]图文发布成功")
+                break
+            except Exception:
+                xiaohongshu_logger.info("  [-] 图文正在发布中...")
+                await asyncio.sleep(0.5)
+
+        await context.storage_state(path=self.account_file)
+        xiaohongshu_logger.success('  [-]cookie更新完毕！')
+        await asyncio.sleep(2)
+        await context.close()
+        await browser.close()
+
+    async def main(self):
+        async with async_playwright() as playwright:
+            await self.upload(playwright)
+

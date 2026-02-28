@@ -23,8 +23,19 @@ const routes = [
   },
   {
     path: '/publish-center',
-    name: 'PublishCenter',
-    component: PublishCenter
+    redirect: '/publish-video'
+  },
+  {
+    path: '/publish-video',
+    name: 'PublishVideo',
+    component: PublishCenter,
+    props: { fixedPublishType: 'video' }
+  },
+  {
+    path: '/publish-image',
+    name: 'PublishImage',
+    component: PublishCenter,
+    props: { fixedPublishType: 'image' }
   },
   {
     path: '/about',

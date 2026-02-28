@@ -64,11 +64,11 @@
 
           <!-- 视频上传区域 -->
           <div class="upload-section">
-            <h3>视频</h3>
+            <h3>{{ tab.publishType === 'image' ? '图片' : '视频' }}</h3>
             <div class="upload-options">
               <el-button type="primary" @click="showUploadOptions(tab)" class="upload-btn">
                 <el-icon><Upload /></el-icon>
-                上传视频
+                {{ tab.publishType === 'image' ? '上传图片' : '上传视频' }}
               </el-button>
             </div>
             
@@ -119,16 +119,18 @@
               :on-success="(response, file) => handleUploadSuccess(response, file, currentUploadTab)"
               :on-error="handleUploadError"
               multiple
-              accept="video/*"
+              :accept="localUploadAccept"
               :headers="authHeaders"
             >
               <el-icon class="el-icon--upload"><Upload /></el-icon>
               <div class="el-upload__text">
-                将视频文件拖到此处，或<em>点击上传</em>
+                {{ localUploadMode === 'image' ? '将图片文件拖到此处，或' : '将视频文件拖到此处，或' }}<em>点击上传</em>
               </div>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持MP4、AVI等视频格式，可上传多个文件
+                  {{ localUploadMode === 'image'
+                    ? '支持jpg/jpeg/png/webp格式，图文单次最多9张'
+                    : '支持MP4、AVI等视频格式，可上传多个文件' }}
                 </div>
               </template>
             </el-upload>
@@ -198,7 +200,7 @@
               <el-checkbox-group v-model="selectedMaterials">
                 <div class="material-list">
                   <div
-                    v-for="material in materials"
+                    v-for="material in selectableMaterials"
                     :key="material.id"
                     class="material-item"
                   >
@@ -293,6 +295,15 @@
               >
                 {{ platform.name }}
               </el-radio>
+            </el-radio-group>
+          </div>
+
+          <!-- 发布类型 -->
+          <div v-if="!isPublishTypeFixed" class="publish-type-section">
+            <h3>发布类型</h3>
+            <el-radio-group v-model="tab.publishType" class="publish-type-radios" @change="() => handlePublishTypeChange(tab)">
+              <el-radio label="video">视频</el-radio>
+              <el-radio label="image">图文</el-radio>
             </el-radio-group>
           </div>
 
@@ -510,6 +521,16 @@ import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { materialApi } from '@/api/material'
 
+const props = defineProps({
+  fixedPublishType: {
+    type: String,
+    default: ''
+  }
+})
+
+const resolvedPublishType = computed(() => (props.fixedPublishType === 'image' ? 'image' : 'video'))
+const isPublishTypeFixed = computed(() => props.fixedPublishType === 'video' || props.fixedPublishType === 'image')
+
 // API base URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
 
@@ -534,6 +555,28 @@ const materialLibraryVisible = ref(false)
 const currentUploadTab = ref(null)
 const selectedMaterials = ref([])
 const materials = computed(() => appStore.materials)
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
+const VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v']
+
+const getFileExt = (filename) => {
+  const normalized = String(filename || '').toLowerCase()
+  const dotIndex = normalized.lastIndexOf('.')
+  return dotIndex === -1 ? '' : normalized.slice(dotIndex)
+}
+
+const isImageFile = (filename) => IMAGE_EXTENSIONS.includes(getFileExt(filename))
+const isVideoFile = (filename) => VIDEO_EXTENSIONS.includes(getFileExt(filename))
+
+const localUploadMode = computed(() => currentUploadTab.value?.publishType === 'image' ? 'image' : 'video')
+const localUploadAccept = computed(() => (
+  localUploadMode.value === 'image' ? '.jpg,.jpeg,.png,.webp' : 'video/*'
+))
+const selectableMaterials = computed(() => {
+  if (localUploadMode.value === 'image') {
+    return materials.value.filter((material) => isImageFile(material.filename))
+  }
+  return materials.value.filter((material) => isVideoFile(material.filename))
+})
 
 // 批量发布相关状态
 const batchPublishing = ref(false)
@@ -551,6 +594,7 @@ const platforms = [
 const defaultTabInit = {
   name: 'tab1',
   label: '发布1',
+  publishType: resolvedPublishType.value, // 发布类型：video/image
   fileList: [], // 后端返回的文件名列表
   displayFileList: [], // 用于显示的文件列表
   selectedAccounts: [], // 选中的账号ID列表
@@ -620,6 +664,7 @@ const addTab = () => {
   const newTab = makeNewTab()
   newTab.name = `tab${tabCounter}`
   newTab.label = `发布${tabCounter}`
+  newTab.publishType = resolvedPublishType.value
   tabs.push(newTab)
   activeTab.value = newTab.name
 }
@@ -639,6 +684,25 @@ const removeTab = (tabName) => {
 // 处理文件上传成功
 const handleUploadSuccess = (response, file, tab) => {
   if (response.code === 200) {
+    if (!tab) {
+      ElMessage.error('上传上下文丢失，请重试')
+      return
+    }
+    const ext = getFileExt(file.name)
+    const isImageMode = tab.publishType === 'image'
+    if (isImageMode && !IMAGE_EXTENSIONS.includes(ext)) {
+      ElMessage.error('图文模式仅支持 jpg/jpeg/png/webp')
+      return
+    }
+    if (!isImageMode && VIDEO_EXTENSIONS.length > 0 && !isVideoFile(file.name) && !String(file.type || '').startsWith('video/')) {
+      ElMessage.error('视频模式仅支持视频文件')
+      return
+    }
+    if (isImageMode && tab.fileList.length >= 9) {
+      ElMessage.error('图文单次最多 9 张图片')
+      return
+    }
+
     // 获取文件路径
     const filePath = response.data.path || response.data
     // 从路径中提取文件名
@@ -650,7 +714,7 @@ const handleUploadSuccess = (response, file, tab) => {
       url: materialApi.getMaterialPreviewUrl(filename), // 使用getMaterialPreviewUrl生成预览URL
       path: filePath,
       size: file.size,
-      type: file.type
+      type: file.type || (isImageMode ? 'image/*' : 'video/*')
     }
     
     // 添加到文件列表
@@ -687,6 +751,19 @@ const removeFile = (tab, index) => {
   }))]
   
   ElMessage.success('文件删除成功')
+}
+
+const handlePublishTypeChange = (tab) => {
+  if (!tab) return
+  if (isPublishTypeFixed.value) {
+    tab.publishType = resolvedPublishType.value
+    return
+  }
+  if (tab.fileList.length > 0) {
+    tab.fileList = []
+    tab.displayFileList = []
+    ElMessage.info('已切换发布类型，原已选素材已清空')
+  }
 }
 
 // 话题相关方法
@@ -782,9 +859,9 @@ const confirmPublish = async (tab) => {
   return new Promise((resolve, reject) => {
     // 数据验证
     if (tab.fileList.length === 0) {
-      ElMessage.error('请先上传视频文件')
+      ElMessage.error(tab.publishType === 'image' ? '请先上传图片文件' : '请先上传视频文件')
       tab.publishing = false // 重置发布状态
-      reject(new Error('请先上传视频文件'))
+      reject(new Error(tab.publishType === 'image' ? '请先上传图片文件' : '请先上传视频文件'))
       return
     }
     if (!tab.title.trim()) {
@@ -805,6 +882,27 @@ const confirmPublish = async (tab) => {
       reject(new Error('请选择发布账号'))
       return
     }
+    if (tab.publishType === 'image' && tab.selectedPlatform !== 1) {
+      ElMessage.error('图文发布首版仅支持小红书平台')
+      tab.publishing = false
+      reject(new Error('图文发布首版仅支持小红书平台'))
+      return
+    }
+    if (tab.publishType === 'image') {
+      const nonImage = tab.fileList.find((file) => !isImageFile(file.name))
+      if (nonImage) {
+        ElMessage.error('图文模式仅支持图片素材')
+        tab.publishing = false
+        reject(new Error('图文模式仅支持图片素材'))
+        return
+      }
+      if (tab.fileList.length > 9) {
+        ElMessage.error('图文单次最多 9 张图片')
+        tab.publishing = false
+        reject(new Error('图文单次最多 9 张图片'))
+        return
+      }
+    }
 
     // 构造发布数据，符合后端API格式
     const publishData = {
@@ -823,7 +921,8 @@ const confirmPublish = async (tab) => {
       category: 0, //表示非原创
       productLink: tab.productLink.trim() || '', // 商品链接
       productTitle: tab.productTitle.trim() || '', // 商品名称
-      isDraft: tab.isDraft // 是否保存为草稿，仅视频号平台使用
+      isDraft: tab.isDraft, // 是否保存为草稿，仅视频号平台使用
+      contentType: tab.publishType
     }
 
     // 调用后端发布API
@@ -906,6 +1005,10 @@ const selectMaterialLibrary = async () => {
   }
   
   selectedMaterials.value = []
+  if (selectableMaterials.value.length === 0) {
+    ElMessage.warning(localUploadMode.value === 'image' ? '素材库中暂无可用图片素材' : '素材库中暂无可用视频素材')
+    return
+  }
   materialLibraryVisible.value = true
 }
 
@@ -917,16 +1020,22 @@ const confirmMaterialSelection = () => {
   }
   
   if (currentUploadTab.value) {
+    const isImageMode = currentUploadTab.value.publishType === 'image'
+    if (isImageMode && currentUploadTab.value.fileList.length + selectedMaterials.value.length > 9) {
+      ElMessage.error('图文单次最多 9 张图片')
+      return
+    }
+
     // 将选中的素材添加到当前tab的文件列表
     selectedMaterials.value.forEach(materialId => {
-      const material = materials.value.find(m => m.id === materialId)
+      const material = selectableMaterials.value.find(m => m.id === materialId)
       if (material) {
         const fileInfo = {
           name: material.filename,
           url: materialApi.getMaterialPreviewUrl(material.file_path.split('/').pop()),
           path: material.file_path,
           size: material.filesize * 1024 * 1024, // 转换为字节
-          type: 'video/mp4'
+          type: isImageMode ? 'image/*' : 'video/*'
         }
         
         // 检查是否已存在相同文件
@@ -1209,6 +1318,7 @@ const batchPublish = async () => {
         .upload-section,
         .account-section,
         .platform-section,
+        .publish-type-section,
         .title-section,
         .product-section,
         .topic-section,
