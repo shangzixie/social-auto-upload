@@ -79,6 +79,8 @@ def post_video_xhs(
         daily_times=None,
         start_days=0,
         content_type='video',
+        original_declare=False,
+        visibility='public',
 ):
     # 生成文件的完整路径
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
@@ -91,7 +93,7 @@ def post_video_xhs(
             print(f"图文文件数量：{len(files)}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = XiaoHongShuImage(title, files, tags, publish_datetime, cookie)
+            app = XiaoHongShuImage(title, files, tags, publish_datetime, cookie, original_declare, visibility)
             asyncio.run(app.main(), debug=False)
         return
 
@@ -106,7 +108,7 @@ def post_video_xhs(
             print(f"视频文件名：{file}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = XiaoHongShuVideo(title, file, tags, publish_datetimes[index], cookie)
+            app = XiaoHongShuVideo(title, file, tags, publish_datetimes[index], cookie, None, original_declare, visibility)
             asyncio.run(app.main(), debug=False)
 
 

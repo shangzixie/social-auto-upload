@@ -64,7 +64,17 @@ async def xiaohongshu_cookie_gen(account_file):
 
 
 class XiaoHongShuVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None):
+    def __init__(
+            self,
+            title,
+            file_path,
+            tags,
+            publish_date: datetime,
+            account_file,
+            thumbnail_path=None,
+            original_declare=False,
+            visibility='public',
+    ):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -74,6 +84,8 @@ class XiaoHongShuVideo(object):
         self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = LOCAL_CHROME_HEADLESS
         self.thumbnail_path = thumbnail_path
+        self.original_declare = bool(original_declare)
+        self.visibility = visibility if visibility in {'public', 'private'} else 'public'
 
     async def set_schedule_time_xiaohongshu(self, page, publish_date):
         print("  [-] 正在设置定时发布时间...")
@@ -202,6 +214,8 @@ class XiaoHongShuVideo(object):
         
         # 上传视频封面
         # await self.set_thumbnail(page, self.thumbnail_path)
+
+        await self.apply_publish_options(page)
 
         # 更换可见元素
         # await self.set_location(page, "青岛市")
@@ -361,13 +375,65 @@ class XiaoHongShuVideo(object):
             # await page.screenshot(path=f"location_error_{location}.png")
             return False
 
+    async def probe_publish_options(self, page: Page, prefix: str):
+        original_count = await page.locator(".original-wrapper").count()
+        permission_count = await page.locator(".permission-card-select").count()
+        xiaohongshu_logger.warning(
+            f"{prefix}: original-wrapper={original_count}, permission-card-select={permission_count}, url={page.url}"
+        )
+        await page.screenshot(path=f"xhs_probe_{prefix}.png", full_page=True)
+
+    async def set_original_declare(self, page: Page):
+        switch_input = page.locator(".original-wrapper input[type='checkbox']").first
+        if not await switch_input.count():
+            await self.probe_publish_options(page, "original_missing")
+            raise RuntimeError("未找到原创声明开关")
+        try:
+            checked = await switch_input.is_checked()
+            if checked != self.original_declare:
+                await switch_input.click(force=True, timeout=3000)
+        except Exception:
+            toggle = page.locator(".original-wrapper .d-switch-simulator").first
+            if await toggle.count():
+                await toggle.click(timeout=3000)
+            else:
+                await self.probe_publish_options(page, "original_click_failed")
+                raise RuntimeError("原创声明开关点击失败")
+
+    async def set_visibility(self, page: Page):
+        target_text = "公开可见" if self.visibility == "public" else "仅自己可见"
+        select = page.locator(".permission-card-select .d-select-main").first
+        if not await select.count():
+            await self.probe_publish_options(page, "permission_missing")
+            raise RuntimeError("未找到可见范围选择框")
+
+        current_text = ""
+        current = page.locator(".permission-card-select .d-select-description").first
+        if await current.count():
+            current_text = (await current.text_content() or "").strip()
+        if target_text in current_text:
+            return
+
+        await select.click(timeout=3000)
+        option = page.get_by_text(target_text).first
+        if await option.count():
+            await option.click(timeout=3000)
+            return
+
+        await self.probe_publish_options(page, "permission_option_missing")
+        raise RuntimeError(f"未找到可见范围选项: {target_text}")
+
+    async def apply_publish_options(self, page: Page):
+        await self.set_original_declare(page)
+        await self.set_visibility(page)
+
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
 
 
 class XiaoHongShuImage(object):
-    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file):
+    def __init__(self, title, file_paths, tags, publish_date: datetime, account_file, original_declare=False, visibility='public'):
         self.title = title
         self.file_paths = [str(file_path) for file_path in file_paths]
         self.tags = tags
@@ -375,6 +441,8 @@ class XiaoHongShuImage(object):
         self.account_file = account_file
         self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = LOCAL_CHROME_HEADLESS
+        self.original_declare = bool(original_declare)
+        self.visibility = visibility if visibility in {'public', 'private'} else 'public'
 
     async def set_schedule_time_xiaohongshu(self, page, publish_date):
         label_element = page.locator("label:has-text('定时发布')")
@@ -483,6 +551,7 @@ class XiaoHongShuImage(object):
         await asyncio.sleep(8)
 
         await self.fill_title_and_tags(page)
+        await self.apply_publish_options(page)
         if self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
@@ -511,3 +580,55 @@ class XiaoHongShuImage(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
+
+    async def probe_publish_options(self, page: Page, prefix: str):
+        original_count = await page.locator(".original-wrapper").count()
+        permission_count = await page.locator(".permission-card-select").count()
+        xiaohongshu_logger.warning(
+            f"{prefix}: original-wrapper={original_count}, permission-card-select={permission_count}, url={page.url}"
+        )
+        await page.screenshot(path=f"xhs_probe_{prefix}.png", full_page=True)
+
+    async def set_original_declare(self, page: Page):
+        switch_input = page.locator(".original-wrapper input[type='checkbox']").first
+        if not await switch_input.count():
+            await self.probe_publish_options(page, "original_missing")
+            raise RuntimeError("未找到原创声明开关")
+        try:
+            checked = await switch_input.is_checked()
+            if checked != self.original_declare:
+                await switch_input.click(force=True, timeout=3000)
+        except Exception:
+            toggle = page.locator(".original-wrapper .d-switch-simulator").first
+            if await toggle.count():
+                await toggle.click(timeout=3000)
+            else:
+                await self.probe_publish_options(page, "original_click_failed")
+                raise RuntimeError("原创声明开关点击失败")
+
+    async def set_visibility(self, page: Page):
+        target_text = "公开可见" if self.visibility == "public" else "仅自己可见"
+        select = page.locator(".permission-card-select .d-select-main").first
+        if not await select.count():
+            await self.probe_publish_options(page, "permission_missing")
+            raise RuntimeError("未找到可见范围选择框")
+
+        current_text = ""
+        current = page.locator(".permission-card-select .d-select-description").first
+        if await current.count():
+            current_text = (await current.text_content() or "").strip()
+        if target_text in current_text:
+            return
+
+        await select.click(timeout=3000)
+        option = page.get_by_text(target_text).first
+        if await option.count():
+            await option.click(timeout=3000)
+            return
+
+        await self.probe_publish_options(page, "permission_option_missing")
+        raise RuntimeError(f"未找到可见范围选项: {target_text}")
+
+    async def apply_publish_options(self, page: Page):
+        await self.set_original_declare(page)
+        await self.set_visibility(page)

@@ -1,6 +1,8 @@
 import unittest
 
 from myUtils.publish_payload import (
+    normalize_visibility,
+    normalize_original_declare,
     normalize_content_type,
     validate_xiaohongshu_publish_payload,
 )
@@ -35,6 +37,20 @@ class PublishPayloadTests(unittest.TestCase):
             content_type="image",
             file_list=["a.png", "b.jpeg", "c.webp"],
         )
+
+    def test_normalize_visibility(self):
+        self.assertEqual(normalize_visibility("public"), "public")
+        self.assertEqual(normalize_visibility("公开可见"), "public")
+        self.assertEqual(normalize_visibility("private"), "private")
+        self.assertEqual(normalize_visibility("仅自己可见"), "private")
+        self.assertEqual(normalize_visibility("unknown"), "public")
+
+    def test_normalize_original_declare(self):
+        self.assertTrue(normalize_original_declare(True))
+        self.assertTrue(normalize_original_declare(1))
+        self.assertFalse(normalize_original_declare(False))
+        self.assertFalse(normalize_original_declare(0))
+        self.assertFalse(normalize_original_declare(None))
 
 
 if __name__ == "__main__":

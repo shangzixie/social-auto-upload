@@ -23,6 +23,27 @@ def normalize_content_type(content_type):
     return "video"
 
 
+def normalize_visibility(visibility):
+    if visibility is None:
+        return "public"
+    normalized = str(visibility).strip().lower()
+    if normalized in {"public", "公开可见"}:
+        return "public"
+    if normalized in {"private", "仅自己可见", "自己可见"}:
+        return "private"
+    return "public"
+
+
+def normalize_original_declare(original_declare):
+    if isinstance(original_declare, bool):
+        return original_declare
+    if isinstance(original_declare, (int, float)):
+        return bool(original_declare)
+    if isinstance(original_declare, str):
+        return original_declare.strip().lower() in {"1", "true", "yes", "on", "是"}
+    return False
+
+
 def is_image_file(file_name):
     return Path(str(file_name)).suffix.lower() in IMAGE_EXTENSIONS
 

@@ -12,7 +12,12 @@ from flask import Flask, request, jsonify, Response, render_template, send_from_
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
-from myUtils.publish_payload import normalize_content_type, validate_xiaohongshu_publish_payload
+from myUtils.publish_payload import (
+    normalize_content_type,
+    normalize_original_declare,
+    normalize_visibility,
+    validate_xiaohongshu_publish_payload,
+)
 
 active_queues = {}
 app = Flask(__name__)
@@ -401,6 +406,8 @@ def postVideo():
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
     content_type = normalize_content_type(data.get('contentType'))
+    original_declare = normalize_original_declare(data.get('originalDeclare'))
+    visibility = normalize_visibility(data.get('visibility'))
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -438,6 +445,8 @@ def postVideo():
                     daily_times,
                     start_days,
                     content_type,
+                    original_declare,
+                    visibility,
                 )
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,

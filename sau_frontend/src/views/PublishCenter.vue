@@ -307,6 +307,19 @@
             </el-radio-group>
           </div>
 
+          <!-- 小红书原创与可见范围 -->
+          <div v-if="tab.selectedPlatform === 1" class="xhs-options-section">
+            <h3>发布设置</h3>
+            <el-checkbox v-model="tab.originalDeclare">原创声明</el-checkbox>
+            <div class="visibility-options">
+              <span class="label">可见范围：</span>
+              <el-radio-group v-model="tab.visibility">
+                <el-radio label="public">公开可见</el-radio>
+                <el-radio label="private">仅自己可见</el-radio>
+              </el-radio-group>
+            </div>
+          </div>
+
           <!-- 草稿选项 (仅在视频号可见) -->
           <div v-if="tab.selectedPlatform === 2" class="draft-section">
             <el-checkbox
@@ -610,6 +623,8 @@ const defaultTabInit = {
   productLink: '', // 商品链接
   productTitle: '', // 商品名称
   selectedTopics: [], // 话题列表（不带#号）
+  originalDeclare: false, // 小红书原创声明
+  visibility: 'public', // 小红书可见范围
   scheduleEnabled: false, // 定时发布开关
   videosPerDay: 1, // 每天发布视频数量
   dailyTimes: ['10:00'], // 每天发布时间点列表
@@ -949,7 +964,9 @@ const confirmPublish = async (tab) => {
       productLink: tab.productLink.trim() || '', // 商品链接
       productTitle: tab.productTitle.trim() || '', // 商品名称
       isDraft: tab.isDraft, // 是否保存为草稿，仅视频号平台使用
-      contentType: tab.publishType
+      contentType: tab.publishType,
+      originalDeclare: tab.originalDeclare,
+      visibility: tab.visibility
     }
 
     // 调用后端发布API
@@ -1346,6 +1363,7 @@ const batchPublish = async () => {
         .account-section,
         .platform-section,
         .publish-type-section,
+        .xhs-options-section,
         .title-section,
         .product-section,
         .topic-section,
@@ -1357,6 +1375,15 @@ const batchPublish = async () => {
           .product-name-input,
           .product-link-input {
             margin-bottom: 5px;
+          }
+        }
+
+        .xhs-options-section {
+          .visibility-options {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
           }
         }
         
