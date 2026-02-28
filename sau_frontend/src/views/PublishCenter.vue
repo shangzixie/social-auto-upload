@@ -454,7 +454,7 @@
               />
               <div v-if="tab.scheduleEnabled" class="schedule-settings">
                 <div class="schedule-item">
-                  <span class="label">每天发布视频数：</span>
+                  <span class="label">每天发布{{ tab.publishType === 'image' ? '图文' : '视频' }}数：</span>
                   <el-select v-model="tab.videosPerDay" placeholder="选择发布数量">
                     <el-option
                       v-for="num in 55"
@@ -530,6 +530,7 @@ const props = defineProps({
 
 const resolvedPublishType = computed(() => (props.fixedPublishType === 'image' ? 'image' : 'video'))
 const isPublishTypeFixed = computed(() => props.fixedPublishType === 'video' || props.fixedPublishType === 'image')
+const fixedPlatformKey = computed(() => (props.fixedPublishType === 'image' ? 1 : null))
 
 // API base URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
@@ -584,12 +585,18 @@ const batchPublishMessage = ref('')
 const batchPublishType = ref('info')
 
 // 平台列表 - 对应后端type字段
-const platforms = [
+const allPlatforms = [
   { key: 3, name: '抖音' },
   { key: 4, name: '快手' },
   { key: 2, name: '视频号' },
   { key: 1, name: '小红书' }
 ]
+const platforms = computed(() => {
+  if (fixedPlatformKey.value === 1) {
+    return allPlatforms.filter((platform) => platform.key === 1)
+  }
+  return allPlatforms
+})
 
 const defaultTabInit = {
   name: 'tab1',
@@ -612,6 +619,16 @@ const defaultTabInit = {
   isDraft: false // 是否保存为草稿，仅视频号平台可见
 }
 
+const applyFixedModeToTab = (tab) => {
+  if (!tab) return
+  if (isPublishTypeFixed.value) {
+    tab.publishType = resolvedPublishType.value
+  }
+  if (fixedPlatformKey.value !== null) {
+    tab.selectedPlatform = fixedPlatformKey.value
+  }
+}
+
 // helper to create a fresh deep-copied tab from defaultTabInit
 const makeNewTab = () => {
   // prefer structuredClone when available (newer browsers/node), fallback to JSON
@@ -626,6 +643,7 @@ const makeNewTab = () => {
 const tabs = reactive([
   makeNewTab()
 ])
+applyFixedModeToTab(tabs[0])
 
 // 账号相关状态
 const accountDialogVisible = ref(false)
@@ -664,7 +682,7 @@ const addTab = () => {
   const newTab = makeNewTab()
   newTab.name = `tab${tabCounter}`
   newTab.label = `发布${tabCounter}`
-  newTab.publishType = resolvedPublishType.value
+  applyFixedModeToTab(newTab)
   tabs.push(newTab)
   activeTab.value = newTab.name
 }
@@ -816,6 +834,7 @@ const confirmTopicSelection = () => {
 // 账号选择相关方法
 // 打开账号选择弹窗
 const openAccountDialog = (tab) => {
+  applyFixedModeToTab(tab)
   currentTab.value = tab
   tempSelectedAccounts.value = [...tab.selectedAccounts]
   accountDialogVisible.value = true
